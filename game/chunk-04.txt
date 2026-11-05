@@ -1,0 +1,207 @@
+ght(0xfff4e2, 1.15);
+  fill = new THREE.DirectionalLight(0xffe1c4, 0.4);
+  scene.add(hemi, sun, fill, sun.target, fill.target);
+  fog = new THREE.Fog(0xffb067, 26, 120);
+  sky = new THREE.Color(0xffb067);
+  const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(3.2, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe3a8 }));
+  sunMesh.name = "sunball";
+  scene.add(sunMesh);
+  resize();
+  window.addEventListener("resize", resize);
+}
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const cap = w < 800 ? 1.5 : 2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.updateProjectionMatrix();
+}
+function updateSky(dt) {
+  state.day = (state.day + dt * 0.012) % 1;
+  const k = 0.5 - 0.5 * Math.cos(state.day * Math.PI * 2);
+  if (k < 0.5) sky.copy(SKY_NIGHT).lerp(SKY_DUSK, k / 0.5);
+  else sky.copy(SKY_DUSK).lerp(SKY_DAY, (k - 0.5) / 0.5);
+  if (state.place === "tb") sky.lerp(SKY_DUSK, 0.22);
+  if (state.place === "mt") sky.lerp(new THREE.Color(0xff7d5a), 0.18);
+  if (state.place === "tn") sky.lerp(new THREE.Color(0x2f4a38), 0.16);
+  sun.intensity = 0.42 + k * 0.95;
+  hemi.intensity = 0.42 + k * 0.45;
+  const ang = state.day * Math.PI * 2;
+  const px = state.mode === "select" ? 0 : playerPos.x;
+  const pz = state.mode === "select" ? 0 : playerPos.z;
+  sun.position.set(px + Math.cos(ang) * 26, 16 + k * 24, pz + 12);
+  sun.target.position.set(px, 0, pz);
+  fill.position.set(px - 8, 12, pz + 14);
+  fill.target.position.set(px, 1, pz);
+  const ball = scene.getObjectByName("sunball");
+  if (ball) {
+    ball.visible = state.mode === "play";
+    ball.position.set(px + Math.cos(ang) * 60, 22 + k * 20, pz + Math.sin(ang) * 28);
+  }
+  if (state.mode === "select") {
+    scene.background = null;
+    scene.fog = null;
+    renderer.setClearColor(0x000000, 0);
+  } else {
+    scene.background = sky;
+    scene.fog = fog;
+    fog.color.copy(sky);
+    fog.near = state.place === "hub" ? 28 : 12;
+    fog.far = state.place === "hub" ? 125 : state.place === "tb" ? 42 : 56;
+    renderer.setClearColor(sky, 1);
+  }
+  if (flies) flies.visible = state.mode === "play" && k < 0.42 && (state.place === "hub" || state.place === "tn");
+}
+
+/* --- WEB AUDIO SYNTHESIZER ENGINE --- */
+function ensureAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ac) {
+      ac = new AC();
+      master = ac.createGain(); master.connect(ac.destination);
+      musicGain = ac.createGain(); sfxGain = ac.createGain();
+      musicGain.connect(master); sfxGain.connect(master);
+      const len = ac.sampleRate * 2;
+      noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ac.state === "suspended") ac.resume();
+    applyVol();
+  } catch { ac = null; }
+}
+function applyVol() {
+  if (!musicGain) return;
+  musicGain.gain.value = state.music;
+  sfxGain.gain.value = state.sfx;
+}
+function envGain(t, dur, peak, dest) {
+  const g = ac.createGain();
+  g.connect(dest || sfxGain);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  return g;
+}
+function tone(freq, dur, type, peak, slide) {
+  if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator();
+  o.type = type || "sine";
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+  const g = envGain(t, dur, peak * state.sfx);
+  o.connect(g); o.start(t); o.stop(t + dur + 0.03);
+}
+function noise(dur, freq, peak, kind) {
+  if (!ac) return;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuf;
+  const f = ac.createBiquadFilter();
+  f.type = kind || "bandpass";
+  f.frequency.value = freq;
+  const g = envGain(ac.currentTime, dur, peak * state.sfx);
+  src.connect(f); f.connect(g);
+  src.start(); src.stop(ac.currentTime + dur + 0.03);
+}
+function playBlip() { tone(660, 0.08, "sine", 0.07); tone(880, 0.1, "triangle", 0.04); }
+function playStamp() { noise(0.09, 280, 0.35, "lowpass"); tone(110, 0.16, "sine", 0.22); }
+function playShutter() { noise(0.05, 3200, 0.18, "highpass"); tone(1800, 0.04, "square", 0.03); }
+function playGong() { tone(98, 1.4, "sine", 0.08); tone(147, 1.1, "triangle", 0.04); }
+function playBell() { tone(880, 0.35, "sine", 0.06); tone(1320, 0.28, "sine", 0.03); }
+function playFlute() { tone(660, 0.35, "sine", 0.035, 880); tone(880, 0.4, "sine", 0.02, 660); }
+function playArp() { tone(523, 0.12, "triangle", 0.07); setTimeout(() => tone(659, 0.12, "triangle", 0.07), 90); setTimeout(() => tone(784, 0.18, "triangle", 0.07), 180); }
+function playWrong() { tone(196, 0.18, "square", 0.05); }
+function playStep() { noise(0.04, 180, 0.05, "lowpass"); }
+function stopAmbient() {
+  for (const n of ambientNodes) { try { n.stop?.(); n.disconnect?.(); } catch { /* already stopped */ } }
+  ambientNodes = [];
+}
+function setAmbient(kind) {
+  stopAmbient();
+  if (!ac || state.music <= 0.001 || state.mode !== "play") return;
+  const freqs = { hub: 196, tb: 220, bb: 246, mt: 262, tn: 174, mn: 233 };
+  const o = ac.createOscillator();
+  o.type = "sine";
+  o.frequency.value = freqs[kind] || 196;
+  const g = ac.createGain(); g.gain.value = 0.045;
+  const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700;
+  o.connect(lp); lp.connect(g); g.connect(musicGain); o.start();
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuf; src.loop = true;
+  const bp = ac.createBiquadFilter();
+  bp.type = kind === "mn" || kind === "mt" ? "lowpass" : "highpass";
+  bp.frequency.value = kind === "tb" ? 1600 : kind === "mn" ? 420 : 900;
+  const ng = ac.createGain();
+  ng.gain.value = kind === "tn" ? 0.012 : 0.028;
+  src.connect(bp); bp.connect(ng); ng.connect(musicGain); src.start();
+  ambientNodes.push(o, src);
+}
+
+/* --- PROCEDURAL WORLD & 5 REGIONS BUILDER --- */
+const playerPos = { x: SPAWN.x, y: 0, z: SPAWN.z };
+function house(parent, x, z, w, d, h, wall, roofC) {
+  addMesh(parent, box(w, h, d), wall, x, h / 2, z);
+  const roof = addMesh(parent, cone(Math.max(w, d) * 0.62, h * 0.62, 4), roofC, x, h + h * 0.22, z);
+  roof.rotation.y = Math.PI / 4;
+}
+function stilt(parent, x, z) {
+  for (const [dx, dz] of [[-0.55, -0.4], [0.55, -0.4], [-0.55, 0.4], [0.55, 0.4]]) addMesh(parent, cyl(0.06, 0.08, 1.05, 5), 0x6b4428, x + dx, 0.52, z + dz);
+  addMesh(parent, box(1.7, 0.14, 1.3), 0xc4a06a, x, 1.1, z);
+  addMesh(parent, box(1.5, 0.62, 1.15), 0x8d4a32, x, 1.5, z);
+  const roof = addMesh(parent, cone(1.25, 0.62, 4), 0x9c3b32, x, 2.1, z);
+  roof.rotation.y = Math.PI / 4;
+}
+function palm(parent, x, z, sc = 1) {
+  const trunk = addMesh(parent, cyl(0.09 * sc, 0.15 * sc, 2.1 * sc, 5), 0x8a5a32, x, 1.05 * sc, z);
+  trunk.rotation.z = 0.12;
+  for (let i = 0; i < 5; i++) {
+    const leaf = addMesh(parent, cone(0.11 * sc, 1.25 * sc, 4), 0x2e8a44, x, 2.15 * sc, z);
+    leaf.rotation.order = "YXZ";
+    leaf.rotation.y = (i / 5) * Math.PI * 2;
+    leaf.rotation.z = 1.15;
+  }
+}
+function pine(parent, x, z, sc = 1) {
+  addMesh(parent, cyl(0.1 * sc, 0.14 * sc, 1.1 * sc, 5), 0x6b4428, x, 0.55 * sc, z);
+  addMesh(parent, cone(0.7 * sc, 1.5 * sc, 6), 0x1f6b3a, x, 1.7 * sc, z);
+  addMesh(parent, cone(0.5 * sc, 1.1 * sc, 6), 0x2f8a48, x, 2.45 * sc, z);
+}
+function tree(parent, x, z) {
+  addMesh(parent, cyl(0.14, 0.2, 1.3, 6), 0x6b4428, x, 0.7, z);
+  addMesh(parent, sph(0.85, 8, 6), 0x3d9a4a, x, 1.8, z);
+}
+function jar(parent, x, z, s = 1) {
+  addMesh(parent, sph(0.26 * s, 8, 6), 0xd7efe6, x, 0.26 * s, z);
+  addMesh(parent, cyl(0.09 * s, 0.13 * s, 0.12 * s, 8), 0xc5ddd4, x, 0.5 * s, z);
+}
+function boat(parent, x, z, color) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  const hull = new THREE.Mesh(box(0.85, 0.26, 2.1), matColor(color));
+  hull.position.y = 0.22;
+  const cabin = new THREE.Mesh(box(0.62, 0.4, 0.7), matColor(0xfff6e8));
+  cabin.position.set(0, 0.52, -0.15);
+  const can = new THREE.Mesh(cone(0.55, 0.28, 4), matColor(0xc5312a));
+  can.position.set(0, 0.78, 0.45); can.rotation.y = Math.PI / 4;
+  g.add(hull, cabin, can);
+  parent.add(g);
+  bobbers.push(g);
+}
+function umbrella(parent, x, z, color) {
+  addMesh(parent, cyl(0.04, 0.05, 1.25, 5), 0x6b4428, x, 0.62, z);
+  addMesh(parent, cone(0.8, 0.32, 8), color, x, 1.35, z);
+}
+function arch(parent, x, z, color) {
+  addMesh(parent, cyl(0.16, 0.2, 2.3, 6), 0xfff6e8, x - 1.05, 1.15, z);
+  addMesh(parent, cyl(0.16, 0.2, 2.3, 6), 0xfff6e8, x + 1.05, 1.15, z);
+  addMesh(parent, box(2.7, 0.28, 0.7), color, x, 2.4, z);
+  addMesh(parent, box(2.3, 0.14, 0.45), 0xf0b429, x, 2.15, z);
+}
+function temple(parent, x, z) {
+  for (const dx of [-1.55, -0.5, 0.5, 1.55]) addMesh(parent, cyl(0.12, 0.15, 2.5, 6), 0xefe6d6, x + dx, 1.25, z);
+  addMesh(parent, box(4.1, 0.22, 0.8), 0xb94a3e, x, 2.6, z);
+  addMesh(parent, box(3.3, 0.14, 0.55), 0xf
