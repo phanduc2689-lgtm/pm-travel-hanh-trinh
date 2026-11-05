@@ -1,0 +1,118 @@
+c = $("mini"); const g = c.getContext("2d");
+  g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = "rgba(20,24,28,.45)"; g.fillRect(0, 0, c.width, c.height);
+  const proj = (x, z) => {
+    if (state.place === "hub") return [((x + 24) / 70) * c.width, ((z + 64) / 170) * c.height];
+    const r = regions[state.place];
+    if (!r) return [c.width / 2, c.height / 2];
+    return [c.width / 2 + ((x - r.ox) / 40) * c.width, c.height / 2 + ((z - r.oz) / 40) * c.height];
+  };
+  if (state.place === "hub") {
+    g.fillStyle = "rgba(58,168,188,.35)"; g.fillRect(0, 0, c.width, c.height);
+    for (const isl of ISLANDS) {
+      const p = proj(isl.x, isl.z);
+      g.fillStyle = "#e7c98a"; g.beginPath(); g.arc(p[0], p[1], isl.r * 1.15, 0, Math.PI * 2); g.fill();
+    }
+  } else {
+    g.fillStyle = "#c6a24e"; g.beginPath(); g.arc(c.width / 2, c.height / 2, 58, 0, Math.PI * 2); g.fill();
+  }
+  const p = proj(playerPos.x, playerPos.z);
+  g.fillStyle = "#c5312a"; g.beginPath(); g.arc(p[0], p[1], 5, 0, Math.PI * 2); g.fill();
+}
+function openPanel(name) {
+  if (name === "quest") {
+    openSheet(`<h3>Nhiệm vụ di sản</h3><p class="muted">Mỗi vùng một việc. Xong việc, lại bệ son để đóng dấu.</p>` +
+      IDS.map((id) => `<div class="cardish"><strong>${esc(REGION[id].name)}</strong><p class="muted">${esc(QUEST[id].title)} · ${state.quests[id] ? "Đã xong" : "Chưa làm"} · Dấu: ${state.stamps[id] ? "có" : "chưa"}</p><button type="button" data-go="${id}">Đến vùng này</button></div>`).join(""));
+  } else if (name === "bag") {
+    const items = IDS.filter((id) => state.items[id]).map((id) => `<div class="cardish">${esc(state.items[id])}</div>`).join("") || `<p class="muted">Túi còn trống. Làm nhiệm vụ để có quà lưu niệm.</p>`;
+    const pics = state.photos.map((p) => `<img alt="Ảnh hành trình" src="${p.url}"/>`).join("") || `<p class="muted">Chưa có ảnh drone.</p>`;
+    openSheet(`<h3>Túi đồ</h3><p class="muted">Quà nhỏ: ${state.gifts} · Phim còn chỗ: ${Math.max(0, state.photoCap - state.photos.length)}</p>
+      <div class="grid2">${items}</div><h3>Trang phục đang mặc</h3>
+      <div class="fits">${OUTFIT_ORDER.map((id) => `<button type="button" data-wear="${id}" ${owned(id) ? "" : "disabled"}>${esc(OUTFITS[id].name)}${owned(id) ? "" : " (khoá)"}</button>`).join("")}</div>
+      <h3>Bộ sưu tập</h3><div class="grid2 bag">${pics}</div>`);
+  } else if (name === "shop") {
+    openSheet(`<h3>Cửa hàng</h3><p class="muted">Bạn đang có ${state.sen} hạt sen.</p>
+      <div class="cardish"><strong>Tây Bắc Kỳ vĩ</strong><p class="muted">40 hạt sen</p><button type="button" data-buy="vip_tb" ${state.vip.vip_tb ? "disabled" : ""}>${state.vip.vip_tb ? "Đã mở" : "Mua"}</button></div>
+      <div class="cardish"><strong>Cố đô Hào hoa</strong><p class="muted">40 hạt sen</p><button type="button" data-buy="vip_cd" ${state.vip.vip_cd ? "disabled" : ""}>${state.vip.vip_cd ? "Đã mở" : "Mua"}</button></div>
+      <div class="cardish"><strong>Quà nhỏ</strong><p class="muted">8 hạt sen · để tặng bạn đồng hành</p><button type="button" data-buy="gift">Mua</button></div>
+      <div class="cardish"><strong>Cuộn phim</strong><p class="muted">6 hạt sen · thêm 3 tấm ảnh</p><button type="button" data-buy="film">Mua</button></div>`);
+  } else if (name === "social") {
+    const friends = state.friends.map((id) => npc.find((n) => n.id === id)).filter(Boolean);
+    openSheet(`<h3>Cộng đồng</h3><p class="muted">20 phượt thủ đang đi trên sa bàn. Chạm vào người để xem hồ sơ.</p>
+      <h3>Bạn đồng hành (${friends.length})</h3>` +
+      (friends.map((n) => `<div class="cardish">${esc(n.name)} · ${esc(REGION[n.region].name)}</div>`).join("") || `<p class="muted">Chưa kết bạn.</p>`) +
+      `<h3>Đèn nguyện gần đây</h3>` + state.wishes.slice(0, 6).map((w) => `<div class="cardish"><strong>${esc(w.name)}</strong><p class="muted">${esc(w.text)}</p></div>`).join(""));
+  } else if (name === "rank") {
+    const me = levelInfo(state.xp);
+    const rows = npc.map((n) => ({ name: n.name, score: n.stamps * 1000 + n.level * 10 + n.km, sub: `${n.stamps}/5 dấu · bậc ${n.level}` }));
+    rows.push({ name: state.name + " (bạn)", score: countStamps() * 1000 + me.lv * 10 + state.km, sub: `${countStamps()}/5 dấu · bậc ${me.lv}`, me: true });
+    rows.sort((a, b) => b.score - a.score);
+    openSheet(`<h3>Xếp hạng sa bàn</h3>` + rows.slice(0, 12).map((r, i) => `<div class="rank" ${r.me ? 'style="outline:2px solid #e86a2a"' : ""}><strong>${i + 1}. ${esc(r.name)}</strong><p class="muted">${esc(r.sub)}</p></div>`).join(""));
+  } else if (name === "map") {
+    openSheet(`<h3>Bản đồ hành trình</h3><p class="muted">Bay tới một vùng, hoặc tự đi bộ trên sa bàn tới cổng.</p>` +
+      IDS.map((id) => `<div class="cardish"><strong>${esc(REGION[id].full)}</strong><p class="muted">${state.stamps[id] ? "Đã đóng dấu" : "Chưa dấu"} · ${state.quests[id] ? "Đã làm nhiệm vụ" : "Chưa nhiệm vụ"}</p><button type="button" data-go="${id}">Vào không gian</button></div>`).join("") +
+      `<button type="button" data-act="hub">Về sa bàn</button>`);
+  } else if (name === "passport") {
+    const n = countStamps();
+    openSheet(`<h3>Hộ chiếu di sản</h3><p><strong>${esc(state.name)}</strong> · ${esc(titleOf())}</p>
+      <p class="muted">Khám phá toàn diện Việt Nam</p><div class="bar"><i style="width:${(n / 5) * 100}%"></i></div><p class="muted">${n}/5 dấu</p>
+      <div class="grid2">` + IDS.map((id) => `<article class="p-slot"><strong>${esc(REGION[id].name)}</strong>
+        ${state.stamps[id] ? `<div class="ink">ĐÃ ĐẾN<div>${esc(new Date(state.stamps[id].at).toLocaleDateString("vi-VN"))}</div></div>` : `<p class="muted">Chưa đóng dấu</p>`}
+        <p class="muted">${state.quests[id] ? "Nhiệm vụ xong" : "Chưa nhiệm vụ"}</p></article>`).join("") +
+      `</div><button type="button" id="export-card">Xuất Bưu thiếp Hành trình</button>`);
+    $("export-card").onclick = exportCard;
+  } else if (name === "settings") {
+    openSheet(`<h3>Cài đặt</h3>
+      <label>Nhạc nền <input id="vol-m" type="range" min="0" max="1" step="0.01" value="${state.music}"/></label>
+      <label>Hiệu ứng <input id="vol-s" type="range" min="0" max="1" step="0.01" value="${state.sfx}"/></label>
+      <p class="muted">Máy tính: WASD hoặc mũi tên để đi, kéo chuột để xoay, E để tương tác, Shift để chạy. Điện thoại: kéo nửa trái để đi, nửa phải để nhìn.</p>
+      <p class="muted">A đi sang trái, D sang phải so với hướng camera.</p>
+      <button type="button" data-act="reset-ask">Xoá hành trình trên máy</button>`);
+    $("vol-m").addEventListener("input", (e) => {
+      state.music = Number(e.target.value); applyVol();
+      if (state.music <= 0.001) stopAmbient();
+      else if (ambientNodes.length === 0 && state.mode === "play") setAmbient(state.place);
+      save();
+    });
+    $("vol-s").addEventListener("input", (e) => { state.sfx = Number(e.target.value); applyVol(); save(); });
+  }
+}
+function exportCard() {
+  const c = document.createElement("canvas");
+  c.width = 1080; c.height = 1350;
+  const g = c.getContext("2d");
+  const paint = (img) => {
+    const grd = g.createLinearGradient(0, 0, 0, 1350);
+    grd.addColorStop(0, "#ff9a4a"); grd.addColorStop(0.42, "#fff1dc"); grd.addColorStop(1, "#f3d7a4");
+    g.fillStyle = grd; g.fillRect(0, 0, 1080, 1350);
+    g.strokeStyle = "#2a2118"; g.lineWidth = 18; g.strokeRect(36, 36, 1008, 1278);
+    g.fillStyle = "#c5312a"; g.font = "800 40px sans-serif"; g.textAlign = "center";
+    g.fillText("PM TRAVEL", 540, 110);
+    g.fillStyle = "#2a2118"; g.font = "800 58px sans-serif";
+    g.fillText("HÀNH TRÌNH DI SẢN", 540, 180);
+    g.save(); roundRect(g, 140, 230, 800, 620, 36); g.clip();
+    if (img) g.drawImage(img, 140, 230, 800, 620);
+    else {
+      const skyG = g.createLinearGradient(0, 230, 0, 850);
+      skyG.addColorStop(0, "#ffb067"); skyG.addColorStop(1, "#7fbf8a");
+      g.fillStyle = skyG; g.fillRect(140, 230, 800, 620);
+      g.fillStyle = "#2f6b45"; g.beginPath(); g.moveTo(180, 760); g.lineTo(360, 420); g.lineTo(540, 760); g.fill();
+      g.fillStyle = "#24563a"; g.beginPath(); g.moveTo(480, 780); g.lineTo(700, 460); g.lineTo(900, 780); g.fill();
+      g.fillStyle = "#3aa8bc"; g.fillRect(140, 760, 800, 90);
+    }
+    g.restore();
+    g.strokeStyle = "#c5312a"; g.lineWidth = 8;
+    g.beginPath(); g.arc(860, 780, 90, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = "#c5312a"; g.font = "800 22px sans-serif";
+    g.fillText("ĐÃ CHECK-IN", 860, 770); g.fillText("VIỆT NAM", 860, 800);
+    g.fillStyle = "#2a2118"; g.font = "800 52px sans-serif"; g.textAlign = "center";
+    g.fillText(state.name, 540, 940);
+    g.font = "700 32px sans-serif";
+    g.fillText(titleOf(), 540, 1000);
+    g.font = "600 28px sans-serif";
+    g.fillText("Đã khám phá " + countStamps() + "/5 vùng di sản", 540, 1060);
+    g.font = "500 24px sans-serif"; g.fillStyle = "#6d5844";
+    g.fillText(state.km.toFixed(1) + " km ảo  ·  Bậc " + levelInfo(state.xp).lv, 540, 1120);
+    g.fillText(new Date().toLocaleDateString("vi-VN"), 540, 1180);
+    c.toBlob(async (blob) => {
+ 
