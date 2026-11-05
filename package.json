@@ -5,6 +5,7 @@
   "description": "PM Travel – Hành Trình Di Sản: game 3D du lịch di sản Việt Nam, chạy trên máy local.",
   "scripts": {
     "postinstall": "node scripts/prepare.mjs",
+    "prestart": "node scripts/prepare.mjs",
     "start": "npx --yes serve -l 8080 .",
     "dev": "npx --yes serve -l 8080 ."
   },

@@ -15,9 +15,18 @@ npm install
 npm start
 ```
 
-Mở trình duyệt: [http://localhost:8080](http://localhost:8080)
+Mở trình duyệt: http://localhost:8080
 
-`npm install` tự copy Three.js r170 vào `vendor/three.module.js`. Không mở file `index.html` bằng double-click — trình duyệt chặn ES module khi mở dạng `file://`.
+`npm install` tải Three.js và ghép `game/chunk-*.txt` thành `index.html`, rồi copy engine vào `vendor/three.module.js`. `npm start` làm lại bước ghép nếu thiếu file.
+
+Nếu sau khi cài mà chưa có `index.html` (máy tắt script cài đặt), chạy thêm:
+
+```bash
+node scripts/prepare.mjs
+npm start
+```
+
+Không mở `index.html` bằng double-click. Trình duyệt chặn ES module khi mở dạng `file://`.
 
 ## Cách chơi
 
@@ -27,9 +36,9 @@ Mở trình duyệt: [http://localhost:8080](http://localhost:8080)
 - Bước tới cổng trên sa bàn để vào Tây Bắc, Bắc Bộ, Miền Trung, Tây Nguyên, Miền Tây.
 - Tiến độ lưu trong trình duyệt (localStorage).
 
-## Không có Node?
+## Không muốn dùng npm để mở máy chủ
 
-Sau khi đã có thư mục `vendor/` (từ máy cài Node), có thể chạy:
+Sau khi đã có `index.html` và thư mục `vendor/`:
 
 ```bash
 python -m http.server 8080
