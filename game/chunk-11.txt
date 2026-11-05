@@ -1,0 +1,167 @@
+     if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      openModal(`<h3>Bưu thiếp hành trình</h3><img alt="Bưu thiếp" src="${url}" style="width:100%;border-radius:12px"/>
+        <div class="row"><button type="button" id="dl">Tải PNG</button><button type="button" id="sh">Chia sẻ</button></div>`);
+      $("dl").onclick = () => { const a = document.createElement("a"); a.href = url; a.download = "pm-travel-buu-thiep.png"; a.click(); };
+      $("sh").onclick = async () => {
+        const file = new File([blob], "pm-travel-buu-thiep.png", { type: "image/png" });
+        try {
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: "PM Travel – Hành Trình Di Sản", text: state.name + " · " + titleOf() });
+          } else toast("Máy không chia sẻ được file. Hãy tải PNG.");
+        } catch { /* user cancelled */ }
+      };
+    }, "image/png");
+  };
+  const last = state.photos[state.photos.length - 1];
+  if (last) {
+    const img = new Image();
+    img.onload = () => paint(img);
+    img.src = last.url;
+  } else paint(null);
+}
+function refreshOutfitUI() {
+  document.querySelectorAll("[data-outfit]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.outfit === state.outfit);
+    b.classList.toggle("lock", !owned(b.dataset.outfit));
+  });
+  $("fit-caption").textContent = OUTFITS[state.outfit].name + (owned(state.outfit) ? "" : " · đang khoá");
+  document.querySelectorAll("[data-g]").forEach((b) => b.classList.toggle("on", b.dataset.g === state.gender));
+}
+function selectOutfit(id) {
+  state.outfit = id;
+  applyLook(rig, state.outfit, state.gender);
+  refreshOutfitUI();
+  ensureAudio(); playBlip();
+}
+function startGame() {
+  if (!worldReady || !hub) { pendingStart = true; return; }
+  pendingStart = false;
+  if (!owned(state.outfit)) { toast("Trang phục VIP còn khoá. Hãy chọn bộ miễn phí hoặc mua trong Cửa hàng."); return; }
+  ensureAudio();
+  state.name = cleanName($("pname").value);
+  state.mode = "play";
+  playerPos.x = SPAWN.x; playerPos.z = SPAWN.z;
+  state.yaw = 0; camYaw = 0; state.snapCam = true; state.place = "hub";
+  selectGroup.visible = false; hub.visible = true;
+  for (const id of IDS) if (regions[id]) regions[id].group.visible = false;
+  document.body.classList.add("is-play");
+  setAmbient("hub");
+  updateHUD();
+  toast("Chào " + state.name + ". Bước tới cổng để vào từng vùng.");
+  save();
+}
+function bindUI() {
+  $("btn-start").onclick = startGame;
+  $("btn-default").onclick = () => { state.gender = "nam"; selectOutfit("bui"); };
+  $("prev-fit").onclick = () => selectOutfit(OUTFIT_ORDER[(OUTFIT_ORDER.indexOf(state.outfit) + 3) % 4]);
+  $("next-fit").onclick = () => selectOutfit(OUTFIT_ORDER[(OUTFIT_ORDER.indexOf(state.outfit) + 1) % 4]);
+  document.querySelectorAll("[data-outfit]").forEach((b) => b.addEventListener("click", () => selectOutfit(b.dataset.outfit)));
+  document.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => {
+    state.gender = b.dataset.g; applyLook(rig, state.outfit, state.gender); refreshOutfitUI();
+  }));
+  $("pname").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); startGame(); } });
+  document.querySelectorAll("[data-panel]").forEach((b) => b.addEventListener("click", () => openPanel(b.dataset.panel)));
+  $("sheet").addEventListener("click", (e) => {
+    if (e.target.id === "sheet") closeSheet();
+    const go = e.target.closest("[data-go]"); if (go) travelEnter(go.dataset.go);
+    const buy = e.target.closest("[data-buy]"); if (buy) buyItem(buy.dataset.buy);
+    const wear = e.target.closest("[data-wear]"); if (wear && owned(wear.dataset.wear)) {
+      state.outfit = wear.dataset.wear; applyLook(rig, state.outfit, state.gender); toast("Đã mặc " + OUTFITS[state.outfit].name); save(); openPanel("bag");
+    }
+    if (e.target.closest("[data-act='hub']")) { if (state.place !== "hub") exitRegion(); closeSheet(); }
+    if (e.target.closest("[data-act='reset-ask']")) openModal(`<h3>Xoá hành trình?</h3><p>Dấu, ảnh và hạt sen trên máy này sẽ mất.</p><button type="button" data-act="reset-yes">Xoá hết</button>`);
+  });
+  $("modal").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-act]");
+    if (e.target.id === "modal") { closeModal(); return; }
+    if (!t) return;
+    const act = t.dataset.act;
+    if (act === "close") closeModal();
+    else if (act === "quiz") openQuiz(t.dataset.id);
+    else if (act === "quest") openQuest(t.dataset.id);
+    else if (act === "answer") answerQuiz(t.dataset.id, t.dataset.i);
+    else if (act === "fruit") { if (t.dataset.i === "1") completeQuest("mn"); else { playWrong(); toast("Chưa phải trái trên cây bẹo"); } }
+    else if (act === "wish-send") sendWish();
+    else if (act === "friend") {
+      if (!state.friends.includes(t.dataset.id)) { state.friends.push(t.dataset.id); save(); toast("Đã kết bạn đồng hành"); playBlip(); }
+      closeModal();
+    } else if (act === "greet") { playBell(); toast("Đã gửi lời chúc tới " + npc[t.dataset.i].name); closeModal(); }
+    else if (act === "gift") {
+      if (state.gifts > 0) state.gifts -= 1;
+      else if (state.sen >= 2) state.sen -= 2;
+      else { toast("Cần 2 hạt sen hoặc một quà trong túi"); return; }
+      save(); updateHUD(); playBlip(); toast("Đã tặng một món quà nhỏ"); closeModal();
+    } else if (act === "reset-yes") { localStorage.removeItem(KEY); location.reload(); }
+    else if (act === "panel") { closeModal(); openPanel(t.dataset.panel); }
+  });
+  $("ph-shot").onclick = shoot;
+  $("ph-exit").onclick = exitPhoto;
+  $("ph-up").onclick = () => { if (state.photo) state.photo.y = Math.min(18, state.photo.y + 0.9); };
+  $("ph-down").onclick = () => { if (state.photo) state.photo.y = Math.max(1.2, state.photo.y - 0.9); };
+  const coarse = () => matchMedia("(pointer: coarse)").matches;
+  const down = (e, side) => {
+    if (state.mode !== "play") return;
+    e.preventDefault();
+    if (coarse() && side === "l") {
+      joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: 0, y: 0 };
+      const base = $("joybase"); base.hidden = false;
+      base.style.left = e.clientX + "px"; base.style.top = e.clientY + "px";
+    } else lookP = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  $("zone-l").addEventListener("pointerdown", (e) => down(e, "l"));
+  $("zone-r").addEventListener("pointerdown", (e) => down(e, "r"));
+  window.addEventListener("pointermove", (e) => {
+    if (joy && e.pointerId === joy.id) {
+      const dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
+      const mag = Math.hypot(dx, dy) || 1;
+      const cl = Math.min(46, mag);
+      joy.x = (dx / mag) * (cl / 46); joy.y = (dy / mag) * (cl / 46);
+      $("joyknob").style.transform = `translate(${(dx / mag) * cl}px, ${(dy / mag) * cl}px)`;
+    }
+    if (lookP && e.pointerId === lookP.id) {
+      const dx = e.clientX - lookP.x, dy = e.clientY - lookP.y;
+      lookP.x = e.clientX; lookP.y = e.clientY; lookP.moved += Math.abs(dx) + Math.abs(dy);
+      const sens = 0.0052;
+      if (state.photo) {
+        state.photo.yaw -= dx * sens;
+        state.photo.pitch = Math.max(-1, Math.min(0.65, state.photo.pitch - dy * sens));
+      } else camYaw -= dx * sens;
+    }
+  });
+  window.addEventListener("pointerup", (e) => {
+    if (joy && e.pointerId === joy.id) { joy = null; $("joybase").hidden = true; $("joyknob").style.transform = ""; }
+    if (lookP && e.pointerId === lookP.id) {
+      if (lookP.moved < 12) tryPick(e.clientX, e.clientY);
+      lookP = null;
+    }
+  });
+  window.addEventListener("keydown", (e) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    keys.add(e.code);
+    if (e.code === "KeyE" && !e.repeat) doPrimary();
+    if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  });
+  window.addEventListener("keyup", (e) => keys.delete(e.code));
+  window.addEventListener("blur", () => keys.clear());
+  document.addEventListener("visibilitychange", () => { if (ac && document.visibilityState === "visible") ac.resume(); });
+  window.addEventListener("wheel", (e) => {
+    if (!state.photo) return;
+    state.photo.y = Math.max(1.2, Math.min(18, state.photo.y - Math.sign(e.deltaY) * 0.45));
+  }, { passive: true });
+}
+function travelEnter(id) {
+  enterRegion(id);
+}
+function buyItem(id) {
+  if (id === "vip_tb" || id === "vip_cd") {
+    if (state.vip[id]) return;
+    if (state.sen < 40) { toast("Chưa đủ 40 hạt sen"); return; }
+    state.sen -= 40; state.vip[id] = true; state.outfit = id;
+    applyLook(rig, state.outfit, state.gender); refreshOutfitUI();
+    gain(0, 0, true); toast("Đã mở " + OUTFITS[id].name); playArp(); openPanel("shop");
+  } else if (id === "gift") {
+    if (state.sen < 8) { toast("Chưa đủ hạt sen"); return; }
+    state.sen -= 8; state.gifts += 1; save(); updateHUD(); toast("Đã mua 
