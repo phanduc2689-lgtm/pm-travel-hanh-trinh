@@ -1,0 +1,185 @@
+, z: (Math.random() - 0.5) * 10, s: 0.4 + Math.random() * 0.8, ph: Math.random() * 6 });
+  const F = mk(50, 0xffe58a, 0.12); flies = F.pts; flies.userData = { arr: F.pos, n: 50 };
+  const B = mk(40, 0xffffff, 0.1); bubbles = B.pts; bubbles.userData = { arr: B.pos, n: 40 };
+}
+function updateParticles(dt) {
+  if (petals) {
+    const meta = petals.userData.meta, arr = petals.userData.arr;
+    const cx = state.mode === "select" ? 0 : playerPos.x;
+    const cz = state.mode === "select" ? 0 : playerPos.z;
+    for (let i = 0; i < meta.length; i++) {
+      const p = meta[i];
+      p.y -= dt * p.s;
+      if (p.y < 0) p.y = 4 + Math.random() * 2;
+      arr[i * 3] = cx + p.x + Math.sin(animT + p.ph) * 0.4;
+      arr[i * 3 + 1] = (state.mode === "select" ? 0.8 : 0.4) + p.y;
+      arr[i * 3 + 2] = cz + p.z;
+    }
+    petals.geometry.attributes.position.needsUpdate = true;
+    petals.visible = state.mode === "select" || state.place === "tb";
+  }
+  if (flies?.visible) {
+    const arr = flies.userData.arr;
+    const cx = playerPos.x, cz = playerPos.z;
+    for (let i = 0; i < 50; i++) {
+      arr[i * 3] = cx + Math.sin(animT * 0.6 + i) * 8;
+      arr[i * 3 + 1] = 1 + (i % 5) * 0.4 + Math.sin(animT * 2 + i) * 0.2;
+      arr[i * 3 + 2] = cz + Math.cos(animT * 0.5 + i * 1.3) * 8;
+    }
+    flies.geometry.attributes.position.needsUpdate = true;
+  }
+  if (bubbles) {
+    bubbles.visible = state.place === "mn" && state.mode === "play";
+    if (bubbles.visible) {
+      const arr = bubbles.userData.arr;
+      for (let i = 0; i < 40; i++) {
+        const y = ((animT * 0.4 + i * 0.2) % 2);
+        arr[i * 3] = playerPos.x + ((i % 8) - 4) * 0.8;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = playerPos.z + (Math.floor(i / 8) - 2) * 0.8;
+      }
+      bubbles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+  if (waterGeo && hub && hub.visible) {
+    const arr = waterGeo.attributes.position.array;
+    for (let i = 0; i < waterBaseY.length; i++) {
+      const x = arr[i * 3], z = arr[i * 3 + 2];
+      arr[i * 3 + 1] = waterBaseY[i] + Math.sin(x * 0.12 + animT) * 0.1 + Math.cos(z * 0.1 + animT * 0.8) * 0.08;
+    }
+    waterGeo.attributes.position.needsUpdate = true;
+  }
+  for (const b of bobbers) {
+    const base = b.userData.baseY ?? b.position.y;
+    if (b.userData.baseY == null) b.userData.baseY = b.position.y;
+    b.position.y = base + Math.sin(animT * 1.3 + b.position.x) * 0.08;
+  }
+  flames.forEach((f, i) => { f.scale.y = 0.85 + Math.sin(animT * 8 + i) * 0.25; });
+}
+
+/* --- CHARACTER CREATION & PLAYER CONTROLLER --- */
+function makeChibi(opts) {
+  const group = new THREE.Group();
+  const skin = matColor(0xffd2b8);
+  const legL = new THREE.Group(); const legR = new THREE.Group();
+  const armL = new THREE.Group(); const armR = new THREE.Group();
+  legL.position.set(-0.12, 0.48, 0); legR.position.set(0.12, 0.48, 0);
+  armL.position.set(-0.32, 0.92, 0); armR.position.set(0.32, 0.92, 0);
+  const legGeo = new THREE.CapsuleGeometry(0.07, 0.26, 2, 6);
+  const armGeo = new THREE.CapsuleGeometry(0.055, 0.22, 2, 6);
+  const lmesh = new THREE.Mesh(legGeo, skin); lmesh.position.y = -0.2;
+  const rmesh = new THREE.Mesh(legGeo, skin); rmesh.position.y = -0.2;
+  const al = new THREE.Mesh(armGeo, skin); al.position.y = -0.16;
+  const ar = new THREE.Mesh(armGeo, skin); ar.position.y = -0.16;
+  legL.add(lmesh); legR.add(rmesh); armL.add(al); armR.add(ar);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.34, 3, 8), matColor(opts?.cloth || 0xf08a3c));
+  torso.position.y = 0.78;
+  const head = new THREE.Group();
+  head.position.y = 1.28;
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), skin);
+  head.add(skull);
+  const eyeW = matColor(0xffffff);
+  const eyeB = matColor(0x1a1a1a);
+  const eyes = new THREE.Group();
+  for (const sx of [-0.12, 0.12]) {
+    const w = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), eyeW);
+    w.position.set(sx, 0.04, 0.3);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), eyeB);
+    p.position.set(sx + 0.01, 0.03, 0.35);
+    eyes.add(w, p);
+  }
+  head.add(eyes);
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), matColor(0xc45b58));
+  mouth.scale.set(1.4, 0.45, 0.5); mouth.position.set(0, -0.1, 0.32); head.add(mouth);
+  const blush = matColor(0xff8fa3);
+  for (const sx of [-0.18, 0.18]) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), blush);
+    b.scale.set(1, 0.6, 0.4); b.position.set(sx, -0.02, 0.3); head.add(b);
+  }
+  const hair = new THREE.Group(); head.add(hair);
+  const outfit = new THREE.Group();
+  group.add(legL, legR, torso, armL, armR, head, outfit);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.42, 16), matColor(0x000000, { opacity: 0.22, basic: true }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.03; group.add(shadow);
+  const rigLocal = { group, legL, legR, armL, armR, torso, head, hair, outfit, eyes, pants: [] };
+  applyLook(rigLocal, opts?.outfit || "bui", opts?.gender || "nam", opts);
+  return rigLocal;
+}
+function clearGroup(g) {
+  for (const ch of [...g.children]) {
+    g.remove(ch);
+    if (ch.geometry) ch.geometry.dispose();
+  }
+}
+function applyLook(r, outfitId, gender, extra) {
+  const o = OUTFITS[outfitId] || OUTFITS.bui;
+  r.torso.material = matColor(o.cloth);
+  r.torso.scale.set(1, o.dress ? 1.28 : 1, 1);
+  r.torso.position.y = o.dress ? 0.7 : 0.78;
+  clearGroup(r.hair); clearGroup(r.outfit);
+  const hairCol = extra?.elder ? 0xd9dde2 : gender === "nu" ? 0x2a1c16 : 0x3a2a22;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.37, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), matColor(hairCol));
+  cap.position.y = 0.06; r.hair.add(cap);
+  if (gender === "nu" && !extra?.elder) {
+    const lockL = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.28, 2, 6), matColor(hairCol));
+    lockL.position.set(-0.28, -0.12, 0.02);
+    const lockR = lockL.clone(); lockR.position.x = 0.28;
+    r.hair.add(lockL, lockR);
+  }
+  if (extra?.elder) {
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), matColor(0xd9dde2));
+    beard.scale.set(1.2, 0.7, 0.6); beard.position.set(0, -0.2, 0.28); r.hair.add(beard);
+    const cane = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5), matColor(0x6b4428));
+    cane.position.set(0.42, 0.15, 0.1); r.outfit.add(cane);
+  }
+  const pants = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.22), matColor(o.pant));
+  pants.position.set(0, 0.42, 0); r.outfit.add(pants);
+  if (o.hat === "cap") {
+    const capMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.14, 12), matColor(0x2f9a45));
+    capMesh.position.set(0, 1.62, 0);
+    r.outfit.add(capMesh);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 14), matColor(0x2f9a45));
+    brim.position.set(0, 1.54, 0); r.outfit.add(brim);
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.36, 0.16), matColor(0x8a5a3a));
+    pack.position.set(0, 0.95, -0.28); r.outfit.add(pack);
+    const star = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 5), matColor(0xf0b429));
+    star.rotation.x = Math.PI / 2; star.position.set(0, 0.9, 0.22); r.outfit.add(star);
+  } else if (o.hat === "non") {
+    const non = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.16, 16), matColor(0xe6c36a));
+    non.position.set(0, 1.62, 0); r.outfit.add(non);
+  } else if (o.hat === "hmong") {
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.16, 12), matColor(0xd5dde6, { emissive: 0x667788 }));
+    ring.position.set(0, 1.66, 0); r.outfit.add(ring);
+    const pom = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), matColor(0xc5312a));
+    pom.position.set(0, 1.8, 0); r.outfit.add(pom);
+    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.28), matColor(0xf0b429));
+    sash.position.set(0, 0.62, 0.02); r.outfit.add(sash);
+  } else if (o.hat === "khan") {
+    const khan = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.16, 12), matColor(0x1a1a1a));
+    khan.position.set(0, 1.64, 0); r.outfit.add(khan);
+    const fan = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.02, 0.16), matColor(0xf2d7b0));
+    fan.position.set(0.46, 0.85, 0.12); fan.rotation.z = -0.6; r.outfit.add(fan);
+  }
+  if (o.dress) {
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.38, 0.55, 10), matColor(o.cloth));
+    skirt.position.set(0, 0.4, 0); r.outfit.add(skirt);
+  }
+}
+function held(code) {
+  const src = forcedKeys || keys;
+  return src.has(code);
+}
+function readMove() {
+  let ix = 0, iz = 0;
+  if (held("KeyW") || held("ArrowUp")) iz += 1;
+  if (held("KeyS") || held("ArrowDown")) iz -= 1;
+  if (held("KeyD") || held("ArrowRight")) ix += 1;
+  if (held("KeyA") || held("ArrowLeft")) ix -= 1;
+  if (joy) { ix += joy.x; iz += -joy.y; }
+  const m = Math.hypot(ix, iz);
+  if (m > 1) { ix /= m; iz /= m; }
+  return { ix, iz };
+}
+function distToSeg(px, pz, a, b) {
+  const abx = b.x - a.x, abz = b.z - a.z;
+  const t = Math.max(0, Math.min(1, ((px - a.x) * abx +
