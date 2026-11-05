@@ -1,0 +1,212 @@
+ (pz - a.z) * abz) / (abx * abx + abz * abz || 1)));
+  const x = a.x + abx * t, z = a.z + abz * t;
+  return Math.hypot(px - x, pz - z);
+}
+function walkableHub(x, z) {
+  for (const isl of ISLANDS) if ((x - isl.x) ** 2 + (z - isl.z) ** 2 <= isl.r * isl.r) return true;
+  for (let i = 0; i < ISLANDS.length - 1; i++) if (distToSeg(x, z, ISLANDS[i], ISLANDS[i + 1]) < 2.7) return true;
+  return false;
+}
+function clampWalk(nx, nz) {
+  const ok = (x, z) => state.place === "hub" ? walkableHub(x, z) : (x - regions[state.place].ox) ** 2 + (z - regions[state.place].oz) ** 2 <= 16.6 ** 2;
+  if (ok(nx, nz)) return [nx, nz];
+  if (ok(nx, playerPos.z)) return [nx, playerPos.z];
+  if (ok(playerPos.x, nz)) return [playerPos.x, nz];
+  return [playerPos.x, playerPos.z];
+}
+function updatePlayer(dt) {
+  const allow = state.mode === "play" && !state.paused;
+  const { ix, iz } = allow ? readMove() : { ix: 0, iz: 0 };
+  const sprint = held("ShiftLeft") || held("ShiftRight");
+  const walk = sprint ? 10 : 6.4;
+  if (state.photo && allow) {
+    const p = state.photo;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+    const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+    p.x += (fx * iz + rx * ix) * 8 * dt;
+    p.z += (fz * iz + rz * ix) * 8 * dt;
+    p.y = Math.max(1.2, Math.min(18, p.y));
+    camera.position.set(p.x, p.y, p.z);
+    const cp = Math.cos(p.pitch), spn = Math.sin(p.pitch);
+    camera.lookAt(p.x - Math.sin(p.yaw) * cp * 12, p.y + spn * 12, p.z - Math.cos(p.yaw) * cp * 12);
+    state.speed = 0;
+    rig.group.position.set(playerPos.x, Math.sin(animT * 2) * 0.02, playerPos.z);
+    return;
+  }
+  state.speed = allow ? Math.hypot(ix, iz) * walk : 0;
+  if (state.mode === "select") {
+    state.yaw += dt * 0.45;
+    rig.group.position.set(0, 0.42 + Math.sin(animT * 2) * 0.035, 0);
+    rig.group.rotation.y = state.yaw;
+    rig.legL.rotation.x = 0; rig.legR.rotation.x = 0;
+    frameSelectCamera();
+    state.speed = 0;
+    return;
+  }
+  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+  const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
+  if (allow && (ix || iz)) {
+    const ox = playerPos.x, oz = playerPos.z;
+    const c = clampWalk(ox + (fx * iz + rx * ix) * walk * dt, oz + (fz * iz + rz * ix) * walk * dt);
+    playerPos.x = c[0]; playerPos.z = c[1];
+    state.km += Math.hypot(playerPos.x - ox, playerPos.z - oz) * 0.012;
+    const desired = Math.atan2(-(fx * iz + rx * ix), -(fz * iz + rz * ix));
+    const dy = Math.atan2(Math.sin(desired - state.yaw), Math.cos(desired - state.yaw));
+    state.yaw += dy * Math.min(1, dt * 10);
+    stepT -= dt;
+    if (stepT <= 0) { stepT = sprint ? 0.28 : 0.38; playStep(); }
+  }
+  const moving = Math.hypot(ix, iz) > 0.2 && allow;
+  const swing = moving ? Math.sin(animT * (sprint ? 13 : 10)) * 0.65 : 0;
+  rig.legL.rotation.x = swing; rig.legR.rotation.x = -swing;
+  rig.armL.rotation.x = -swing * 0.7; rig.armR.rotation.x = swing * 0.7;
+  rig.group.position.set(playerPos.x, Math.sin(animT * (moving ? 10 : 2)) * (moving ? 0.03 : 0.02), playerPos.z);
+  rig.group.rotation.y = state.yaw + Math.PI;
+  const dist = 6.3, height = 2.75;
+  desiredCam.set(playerPos.x - fx * dist, height, playerPos.z - fz * dist);
+  lookAtTarget.set(playerPos.x, 1.25, playerPos.z);
+  if (state.snapCam) { camera.position.copy(desiredCam); state.snapCam = false; }
+  else camera.position.lerp(desiredCam, 1 - Math.exp(-dt * 5));
+  camera.lookAt(lookAtTarget);
+}
+function frameSelectCamera() {
+  const stage = $("stage");
+  const rect = stage.getBoundingClientRect();
+  if (rect.height < 30) return;
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height * 0.42;
+  const fov = camera.fov * Math.PI / 180;
+  const dist = 5.05;
+  const visH = 2 * Math.tan(fov / 2) * dist;
+  const visW = visH * camera.aspect;
+  const shiftX = (0.5 - cx / window.innerWidth) * visW;
+  const shiftY = (cy / window.innerHeight - 0.5) * visH;
+  const chest = 1.5;
+  camera.position.set(shiftX, chest + 0.25 + shiftY, dist);
+  camera.lookAt(shiftX, chest + shiftY, 0);
+}
+
+/* --- NPC / OTHER PLAYERS INSTANCED SYSTEM --- */
+function buildCrowd() {
+  const bodyGeo = new THREE.CapsuleGeometry(0.2, 0.28, 3, 6); bodyGeo.translate(0, 0.52, 0);
+  const headGeo = new THREE.SphereGeometry(0.2, 8, 6); headGeo.translate(0, 1.02, 0);
+  crowdBody = new THREE.InstancedMesh(bodyGeo, matColor(0xffffff), 20);
+  crowdHead = new THREE.InstancedMesh(headGeo, matColor(0xffd2b8), 20);
+  crowdBody.frustumCulled = false; crowdHead.frustumCulled = false;
+  crowdBody.userData.kind = "crowd";
+  scene.add(crowdBody, crowdHead);
+  const cols = [0xf08a3c, 0x2f9a45, 0x1d4e89, 0x8d5a34, 0xc5312a];
+  for (let i = 0; i < 20; i++) {
+    crowdBody.setColorAt(i, new THREE.Color(cols[i % cols.length]));
+    npc.push({
+      id: "ban" + i, name: NAMES[i], level: 1 + (i * 3) % 11, region: IDS[i % 5],
+      outfit: OUTFIT_ORDER[i % 4], stamps: i % 6, km: 8 + i * 3.4,
+      gender: i % 2 ? "nu" : "nam", ang: i, speed: 0.28 + (i % 5) * 0.05, island: i % 5, rad: 4 + (i % 4),
+    });
+  }
+  if (crowdBody.instanceColor) crowdBody.instanceColor.needsUpdate = true;
+  const lgeo = cone(0.16, 0.32, 6); lgeo.translate(0, 0.2, 0);
+  lanternBody = new THREE.InstancedMesh(lgeo, matColor(0xffb347, { emissive: 0xff5a00 }), 28);
+  lanternBody.frustumCulled = false;
+  lanternBody.userData.kind = "lantern";
+  scene.add(lanternBody);
+}
+function updateCrowd(dt) {
+  if (!crowdBody || !lanternBody) return;
+  const place = state.place;
+  for (let i = 0; i < npc.length; i++) {
+    const n = npc[i];
+    let show = state.mode === "play";
+    let x = 0, z = 0;
+    if (place === "hub") {
+      const isl = ISLANDS[n.island];
+      n.ang += dt * n.speed;
+      x = isl.x + Math.cos(n.ang) * n.rad;
+      z = isl.z + Math.sin(n.ang) * n.rad;
+    } else if (i < 8 && regions[place]) {
+      const r = regions[place];
+      n.ang += dt * n.speed;
+      x = r.ox + Math.cos(n.ang) * (3.2 + (n.rad % 3));
+      z = r.oz + Math.sin(n.ang) * (3.2 + (n.rad % 3));
+    } else show = false;
+    if (!show || state.mode !== "play") {
+      dummy.position.set(0, -40, 0); dummy.scale.setScalar(0.001);
+      n.x = null;
+    } else {
+      dummy.position.set(x, 0, z); dummy.scale.setScalar(1); dummy.rotation.set(0, n.ang, 0);
+      n.x = x; n.z = z;
+    }
+    dummy.updateMatrix();
+    crowdBody.setMatrixAt(i, dummy.matrix);
+    crowdHead.setMatrixAt(i, dummy.matrix);
+  }
+  crowdBody.instanceMatrix.needsUpdate = true;
+  crowdHead.instanceMatrix.needsUpdate = true;
+  const anchor = lanternAnchor();
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2 + animT * 0.05;
+    const rad = anchor.r + Math.sin(i) * 0.4;
+    dummy.position.set(anchor.x + Math.cos(a) * rad, 0.55 + Math.sin(animT * 1.4 + i) * 0.12, anchor.z + Math.sin(a) * rad * 0.72);
+    dummy.rotation.set(0, a, 0); dummy.scale.setScalar(state.mode === "play" ? 1 : 0.001);
+    dummy.updateMatrix();
+    lanternBody.setMatrixAt(i, dummy.matrix);
+  }
+  lanternBody.instanceMatrix.needsUpdate = true;
+}
+function lanternAnchor() {
+  if (state.place === "hub" || !regions[state.place]) return { x: 28, z: 8, r: 8 };
+  const r = regions[state.place];
+  return { x: r.ox + 6.4, z: r.oz - 4.6, r: 2.4 };
+}
+
+/* --- INTERACTION, QUESTS & MINI-GAMES --- */
+function syncPause() {
+  state.paused = !$("sheet").hidden || !$("modal").hidden;
+}
+function openModal(html) {
+  if (state.mini?.stop) state.mini.stop();
+  state.mini = null;
+  const m = $("modal");
+  m.hidden = false;
+  m.innerHTML = `<div class="modal-card">${html}<div class="row"><button type="button" data-act="close">Đóng</button></div></div>`;
+  syncPause();
+}
+function closeModal() {
+  if (state.mini?.stop) state.mini.stop();
+  state.mini = null;
+  $("modal").hidden = true;
+  $("modal").innerHTML = "";
+  syncPause();
+}
+function openSheet(html) {
+  const s = $("sheet");
+  s.hidden = false;
+  s.innerHTML = `<div class="sheet-card">${html}<button type="button" id="sheet-close">Đóng</button></div>`;
+  $("sheet-close").onclick = closeSheet;
+  syncPause();
+}
+function closeSheet() {
+  $("sheet").hidden = true;
+  $("sheet").innerHTML = "";
+  syncPause();
+}
+function gain(sen, xp, quiet) {
+  const before = levelInfo(state.xp).lv;
+  state.sen += sen; state.xp += xp;
+  const after = levelInfo(state.xp).lv;
+  save(); updateHUD();
+  if (!quiet && after > before) toast("Lên Bậc " + after + "!");
+  return after > before;
+}
+function collectActs() {
+  if (state.mode !== "play" || state.photo || state.paused) return [];
+  const acts = [];
+  const push = (id, label, d, run) => { if (d < 3.35) acts.push({ id, label, d, run }); };
+  if (state.place === "hub") {
+    for (const isl of ISLANDS) push("gate-" + isl.id, "Bước vào " + isl.name, Math.hypot(playerPos.x - isl.x, playerPos.z - isl.z), () => enterRegion(isl.id));
+  } else if (regions[state.place]) {
+    const r = regions[state.place];
+    for (const s of r.spots) {
+      const d = Math.hypot(playerPos.x - (r.ox + s.x), playerPos.z - (r.oz + s.z));
+      push(s.kind, s.label, d, () => doSpot(s.kind));
+    
