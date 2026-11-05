@@ -1,0 +1,191 @@
+ồng chiêng Tây Nguyên được UNESCO ghi danh năm 2005." },
+  mn: { title: "Chọn trái trên cây bẹo", doing: "Chọn trái", fact: "Chợ nổi Cái Răng (Cần Thơ) họp từ mờ sáng. Cây bẹo là cây sào treo hàng để người mua nhận ra." },
+};
+const GIFTNAME = { tb: "Bó lúa vàng", bb: "Chén men rạn", mt: "Đèn lồng Hội An", tn: "Nhịp chiêng", mn: "Giỏ trái miệt vườn" };
+const QUIZ = {
+  tb: { q: "Cung đèo nào là biểu tượng của Hà Giang, soi bóng sông Nho Quế?", a: ["Mã Pí Lèng", "Hải Vân", "Đèo Cả"], ok: 0, fact: "Đèo Mã Pí Lèng nối Mèo Vạc – Đồng Văn, một trong những cung đường đèo hùng vĩ nhất Việt Nam." },
+  bb: { q: "Tháp Rùa nằm giữa hồ nào của Hà Nội?", a: ["Hồ Gươm", "Hồ Tây", "Hồ Trúc Bạch"], ok: 0, fact: "Hồ Gươm còn gọi là Hồ Hoàn Kiếm, gắn với truyền thuyết trả gươm." },
+  mt: { q: "Kinh thành Huế là di sản của triều đại nào?", a: ["Nhà Nguyễn", "Nhà Lý", "Nhà Trần"], ok: 0, fact: "Quần thể di tích Cố đô Huế được UNESCO ghi danh năm 1993." },
+  tn: { q: "Dàn nhạc linh thiêng của buôn làng Tây Nguyên là gì?", a: ["Cồng chiêng", "Đàn bầu", "Đàn tranh"], ok: 0, fact: "Mỗi chiêng có một nốt. Cả dàn mới thành bài, không ai chơi thay phần của người khác." },
+  mn: { q: "Chợ nổi nào là biểu tượng của Cần Thơ?", a: ["Cái Răng", "Cái Bè", "Long Xuyên"], ok: 0, fact: "Cái Bè thuộc Tiền Giang. Cái Răng thuộc Cần Thơ và là chợ nổi lớn nhất miền Tây." },
+};
+const TALK = {
+  tb: { name: "Cô Ý", role: "Đại sứ Tây Bắc", line: "Gió núi vừa đẩy mây khỏi đèo. Xuống ruộng vàng với mình một lúc nhé." },
+  bb: { name: "Nghệ nhân Tâm", role: "Làng gốm Bát Tràng", line: "Đất còn ấm. Tay đều thì thành chén, tay vội thì thành mẻ." },
+  mt: { name: "Chú Lan", role: "Phố cổ Hội An", line: "Rằm này sông Hoài đầy đèn. Giữ được sắc là giữ được phố." },
+  tn: { name: "Già Ksor", role: "Buôn làng", line: "Chiêng không đánh một mình. Nghe nhịp rồi gõ đúng lúc." },
+  mn: { name: "Cô Sáu", role: "Thương hồ", line: "Nhìn cây bẹo mà chọn. Đừng nhầm dừa với xoài kẻo thuyền cười." },
+};
+const NAMES = ["Minh Anh","Quốc Huy","Thanh Hà","Bảo Ngọc","Đức Trí","Lan Hương","Phương Nam","Gia Bảo","Thuỳ Dương","Khánh Vy","Hoàng Long","Mỹ Linh","Tuấn Kiệt","Hà My","Quang Dũng","Ngọc Mai","Đình Phong","Trà My","Kiều Trang","Nhật Minh"];
+const ISLANDS = [
+  { id: "tb", name: "Tây Bắc", x: 0, z: -48, r: 15, color: 0xd6aa45 },
+  { id: "bb", name: "Bắc Bộ", x: 14, z: -16, r: 13, color: 0x8fbf6a },
+  { id: "mt", name: "Miền Trung", x: 0, z: 16, r: 13, color: 0xe6c98a },
+  { id: "tn", name: "Tây Nguyên", x: -12, z: 46, r: 13, color: 0x3f8f4a },
+  { id: "mn", name: "Miền Tây", x: 8, z: 76, r: 15, color: 0x6fbf7a },
+];
+const DETAIL = { tb: [500, 0], bb: [500, 90], mt: [500, 180], tn: [500, 270], mn: [500, 360] };
+const SPAWN = { x: 14, z: -7 };
+const SEED_WISHES = [
+  { name: "Lan Hương", text: "Bình an cho người đi đường xa.", place: "hub" },
+  { name: "Quốc Huy", text: "Xuân này được về Hội An.", place: "mt" },
+  { name: "Cô Sáu", text: "Chợ sáng đủ ghe, đủ tiếng cười.", place: "mn" },
+  { name: "Già Ksor", text: "Chiêng ngân, buôn no, rừng còn.", place: "tn" },
+  { name: "Nghệ nhân Tâm", text: "Lửa lò đừng tắt.", place: "bb" },
+  { name: "Cô Ý", text: "Mùa vàng no ấm bản làng.", place: "tb" },
+];
+
+const state = {
+  mode: "select", place: "hub", outfit: "bui", gender: "nam", name: "Phượt Thủ",
+  yaw: 0, speed: 0, xp: 0, sen: 0, km: 0, stamps: {}, quests: {}, photos: [],
+  wishes: SEED_WISHES.map((w) => ({ ...w, at: Date.now() })), friends: [], gifts: 0,
+  vip: {}, music: 0.35, sfx: 0.75, day: 0.16, paused: false, photo: null,
+  photoCap: 6, photoBonus: {}, quizDone: {}, wishDone: {}, items: {}, certSeen: false,
+  acts: [], snapCam: true, return: null, stampUntil: 0, mini: null,
+};
+let camYaw = 0;
+let forcedKeys = null;
+const keys = new Set();
+let renderer, scene, camera, sun, fill, hemi, fog, sky;
+let hub, selectGroup, rig, crowdBody, crowdHead, lanternBody, petals, flies, bubbles;
+let waterGeo, waterBaseY, animT = 0;
+const regions = {};
+const npc = [];
+const bobbers = [];
+const flames = [];
+const GEO = {};
+const MATS = {};
+const lookAtTarget = new THREE.Vector3();
+const desiredCam = new THREE.Vector3();
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const dummy = new THREE.Object3D();
+const SKY_NIGHT = new THREE.Color(0x1b2436);
+const SKY_DUSK = new THREE.Color(0xff9a62);
+const SKY_DAY = new THREE.Color(0x8ec8f0);
+let promptKey = "";
+let hudT = 0;
+let hintT = 8;
+let joy = null;
+let lookP = null;
+let ac, master, musicGain, sfxGain, noiseBuf;
+let ambientNodes = [];
+let fluteT = 6, gongT = 4, stepT = 0;
+
+const $ = (id) => document.getElementById(id);
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case "&": return "\u0026amp;";
+      case "<": return "\u0026lt;";
+      case ">": return "\u0026gt;";
+      case "\"": return "\u0026quot;";
+      default: return "\u0026#39;";
+    }
+  });
+}
+function toast(msg) {
+  const n = $("toast");
+  n.textContent = msg;
+  n.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => n.classList.remove("show"), 2400);
+}
+function cleanName(s) {
+  const t = String(s || "").replace(/\s+/g, " ").trim().slice(0, 16);
+  return t || "Phượt Thủ";
+}
+function levelInfo(xp) {
+  let lv = 1, need = 40, spent = 0;
+  while (lv < 40 && xp >= spent + need) { spent += need; lv += 1; need = Math.round(need * 1.28 + 8); }
+  return { lv, cur: xp - spent, need };
+}
+function countStamps() { return IDS.filter((id) => state.stamps[id]).length; }
+function titleOf() {
+  const n = countStamps();
+  if (n >= 5) return "Phượt Thủ Xuất Sắc Xuyên Việt";
+  if (n >= 3) return "Lữ Khách Di Sản";
+  if (n >= 1) return "Người Giữ Dấu";
+  return "Tân Phượt Thủ";
+}
+function owned(id) { return !OUTFITS[id].vip || !!state.vip[id]; }
+
+/* --- SETUP THREE.JS, LIGHTING, FOG & DAY-NIGHT --- */
+function box(w, h, d) { const k = `b${w}x${h}x${d}`; return GEO[k] || (GEO[k] = new THREE.BoxGeometry(w, h, d)); }
+function cyl(rt, rb, h, s) { const k = `c${rt}_${rb}_${h}_${s}`; return GEO[k] || (GEO[k] = new THREE.CylinderGeometry(rt, rb, h, s)); }
+function cone(r, h, s) { const k = `k${r}_${h}_${s}`; return GEO[k] || (GEO[k] = new THREE.ConeGeometry(r, h, s)); }
+function sph(r, w, h) { const k = `s${r}_${w}_${h || w}`; return GEO[k] || (GEO[k] = new THREE.SphereGeometry(r, w, h || Math.max(4, w >> 1))); }
+
+function matColor(hex, opts) {
+  const o = opts || {};
+  const k = `${hex}|${o.opacity ?? ""}|${o.emissive ?? ""}|${o.basic ? 1 : 0}`;
+  if (!MATS[k]) {
+    if (o.basic) {
+      MATS[k] = new THREE.MeshBasicMaterial({ color: hex, transparent: o.opacity != null && o.opacity < 1, opacity: o.opacity ?? 1, depthWrite: !(o.opacity < 1) });
+    } else {
+      const m = new THREE.MeshLambertMaterial({
+        color: hex,
+        emissive: new THREE.Color(o.emissive || 0x000000),
+        emissiveIntensity: o.emissive ? 0.85 : 0,
+        transparent: o.opacity != null && o.opacity < 1,
+        opacity: o.opacity ?? 1,
+      });
+      if (o.opacity != null && o.opacity < 1) m.depthWrite = false;
+      MATS[k] = m;
+    }
+  }
+  return MATS[k];
+}
+function addMesh(parent, geo, color, x, y, z, opts) {
+  const m = new THREE.Mesh(geo, matColor(color, opts));
+  m.position.set(x, y, z);
+  parent.add(m);
+  return m;
+}
+function softTex() {
+  const c = document.createElement("canvas");
+  c.width = 32; c.height = 32;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(16, 16, 1, 16, 16, 16);
+  grd.addColorStop(0, "rgba(255,255,255,1)");
+  grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd; g.fillRect(0, 0, 32, 32);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+function makeLabel(text, sc) {
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 128;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgba(42,33,24,0.78)";
+  roundRect(g, 8, 28, 496, 76, 28); g.fill();
+  g.fillStyle = "#fff6e8";
+  g.font = "700 40px sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(text, 256, 66);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  const k = sc || 3.2;
+  s.scale.set(k * 2.1, k * 0.52, 1);
+  return s;
+}
+function initThree() {
+  renderer = new THREE.WebGLRenderer({ canvas: $("view"), antialias: true, alpha: true, powerPreference: "high-performance" });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.setClearColor(0x000000, 0);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(48, 1, 0.1, 260);
+  hemi = new THREE.HemisphereLight(0xfff1dc, 0x6ea36a, 0.78);
+  sun = new THREE.DirectionalLi
