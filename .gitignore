@@ -1,4 +1,5 @@
 node_modules/
 vendor/three.module.js
+index.html
 .DS_Store
 *.log
