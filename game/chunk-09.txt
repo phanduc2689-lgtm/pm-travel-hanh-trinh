@@ -1,0 +1,177 @@
+.7, 2.45, 3.2, 4.0, 4.7, 5.5, 6.25];
+  openModal(`<h3>Nhịp cồng chiêng</h3><p class="muted">Gõ khi thanh vàng chạm ô sáng. Cần 5 nhịp đúng.</p><div class="track" id="track"><div class="zone"></div></div><button type="button" id="hit">GÕ CHIÊNG</button><p id="rh-meta" class="muted"></p>`);
+  const track = $("modal").querySelector("#track");
+  times.forEach((_, i) => { const n = document.createElement("div"); n.className = "beat"; n.dataset.i = String(i); track.appendChild(n); });
+  const t0 = performance.now();
+  const lead = 1.6;
+  const hit = new Set();
+  let done = false;
+  const judge = () => {
+    const now = (performance.now() - t0) / 1000;
+    let best = -1, bd = 0.2;
+    times.forEach((t, i) => { if (hit.has(i)) return; const d = Math.abs(now - t); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { hit.add(best); playGong(); } else playWrong();
+    const meta = $("modal").querySelector("#rh-meta");
+    if (meta) meta.textContent = `${hit.size}/8 đúng`;
+  };
+  $("modal").querySelector("#hit").onclick = judge;
+  state.mini = { tick() {
+    if (done) return;
+    const now = (performance.now() - t0) / 1000;
+    track.querySelectorAll(".beat").forEach((n) => {
+      const i = Number(n.dataset.i);
+      const y = (now - (times[i] - lead)) / lead;
+      n.style.top = Math.max(-10, Math.min(100, y * 100)) + "%";
+      n.style.opacity = hit.has(i) ? "0.25" : "1";
+    });
+    if (now > times[times.length - 1] + 0.7) {
+      done = true;
+      if (hit.size >= 5) completeQuest("tn");
+      else failMini("tn", "Chưa đủ nhịp. Cần ít nhất 5 tiếng đúng.");
+    }
+  } };
+}
+function startFruit() {
+  openModal(`<h3>Cây bẹo chợ nổi</h3><p>Trên sào treo một trái dài, vỏ vàng, thơm nắng. Thương hồ gọi đó là gì?</p>
+    <div class="fruits">
+      <button type="button" data-act="fruit" data-i="0">Dừa<div class="fig" style="background:#6fbf7a;border-radius:50%"></div></button>
+      <button type="button" data-act="fruit" data-i="1">Xoài<div class="fig" style="background:#f0b429;border-radius:40% 40% 46% 46%"></div></button>
+      <button type="button" data-act="fruit" data-i="2">Mít<div class="fig" style="background:#c5312a;border-radius:12px"></div></button>
+    </div>`);
+}
+function openWish() {
+  openModal(`<h3>Thả đèn nguyện</h3><p class="muted">Một lời chúc, tối đa 60 ký tự. Đèn sẽ trôi cùng những đèn khác.</p>
+    <textarea id="wish" maxlength="60" rows="3" style="width:100%;border-radius:12px;border:1.5px solid #ecd9bf;padding:10px;font-size:16px" placeholder="Viết lời chúc..."></textarea>
+    <button type="button" data-act="wish-send">Thả đèn</button>`);
+}
+function sendWish() {
+  const text = ($("modal").querySelector("#wish")?.value || "").trim().slice(0, 60);
+  if (!text) { toast("Hãy viết một lời chúc"); return; }
+  state.wishes.unshift({ text, place: state.place, at: Date.now(), name: state.name });
+  state.wishes = state.wishes.slice(0, 40);
+  const first = !state.wishDone[state.place];
+  state.wishDone[state.place] = true;
+  if (first) gain(3, 6, true);
+  playBell();
+  closeModal();
+  toast(first ? "Đèn đã thả. +3 hạt sen" : "Đèn đã hoà vào dòng sông");
+  save();
+}
+function doStamp(id) {
+  if (state.stamps[id]) { toast("Dấu " + REGION[id].name + " đã có trong hộ chiếu"); playBlip(); return; }
+  state.stamps[id] = { at: Date.now(), name: state.name };
+  gain(8, 14, true);
+  const fx = $("stampfx");
+  fx.hidden = false;
+  fx.querySelector(".where").textContent = REGION[id].name;
+  fx.querySelector(".who").textContent = state.name;
+  fx.querySelector(".when").textContent = new Date().toLocaleString("vi-VN");
+  state.stampUntil = performance.now() + 1400;
+  playStamp();
+  save(); updateHUD();
+  if (countStamps() >= 5 && !state.certSeen) {
+    state.certSeen = true;
+    setTimeout(() => openModal(`<h3>Phượt Thủ Xuất Sắc Xuyên Việt</h3><p>Đủ 5 dấu hộ chiếu di sản. Bạn đã đi trọn một vòng Việt Nam trên sa bàn này.</p><button type="button" data-act="panel" data-panel="passport">Mở hộ chiếu</button>`), 1500);
+  }
+}
+function openProfile(i) {
+  const n = npc[i];
+  const fr = state.friends.includes(n.id);
+  openModal(`<p class="muted">Phượt thủ trên sa bàn</p><h3>${esc(n.name)}</h3>
+    <p>Bậc ${n.level} · ${esc(REGION[n.region].name)} · ${esc(OUTFITS[n.outfit].name)}</p>
+    <p class="muted">${n.stamps} dấu · ${n.km.toFixed(0)} km ảo · ${n.gender === "nu" ? "Nữ" : "Nam"}</p>
+    <button type="button" data-act="friend" data-id="${n.id}">${fr ? "Đã là bạn đồng hành" : "Kết bạn đồng hành"}</button>
+    <button type="button" data-act="greet" data-i="${i}">Gửi lời chúc</button>
+    <button type="button" data-act="gift" data-i="${i}">Tặng quà nhỏ</button>`);
+}
+function tryPick(cx, cy) {
+  if (state.mode !== "play" || state.paused || state.photo) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((cx - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((cy - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects([crowdBody, lanternBody], false);
+  if (!hits.length) return;
+  const h = hits[0];
+  if (h.object === crowdBody && h.instanceId != null && npc[h.instanceId]?.x != null) openProfile(h.instanceId);
+  else if (h.object === lanternBody && h.instanceId != null) {
+    const w = state.wishes[h.instanceId % state.wishes.length];
+    if (w) openModal(`<h3>Đèn của ${esc(w.name)}</h3><p>${esc(w.text)}</p>`);
+  }
+}
+function enterPhoto() {
+  if (state.photos.length >= state.photoCap) { toast("Hết chỗ phim. Ghé Cửa hàng mua cuộn phim."); return; }
+  state.photo = { x: playerPos.x + 2, y: 7, z: playerPos.z + 6, yaw: camYaw, pitch: -0.4 };
+  $("photo-ui").classList.add("on");
+  $("hint").style.display = "none";
+}
+function exitPhoto() {
+  state.photo = null;
+  $("photo-ui").classList.remove("on");
+  state.snapCam = true;
+}
+function shoot() {
+  ensureAudio(); playShutter();
+  renderer.render(scene, camera);
+  const src = renderer.domElement;
+  const c = document.createElement("canvas");
+  const w = 480; const h = Math.round(480 * src.height / src.width);
+  c.width = w; c.height = h;
+  c.getContext("2d").drawImage(src, 0, 0, w, h);
+  let url = "";
+  try { url = c.toDataURL("image/jpeg", 0.62); } catch { toast("Không lưu được ảnh"); return; }
+  state.photos.push({ url, place: state.place, at: Date.now() });
+  if (state.photos.length > state.photoCap) state.photos.splice(0, state.photos.length - state.photoCap);
+  const near = state.place !== "hub" && regions[state.place] && Math.hypot(playerPos.x - (regions[state.place].ox + 0.2), playerPos.z - (regions[state.place].oz - 7.4)) < 4;
+  const bonus = near && !state.photoBonus[state.place];
+  if (bonus) state.photoBonus[state.place] = true;
+  gain(bonus ? 6 : 3, bonus ? 10 : 5, true);
+  toast(bonus ? "Ảnh đẹp tại điểm săn mây! +6 hạt sen" : "Đã lưu vào bộ sưu tập");
+  save();
+  document.body.style.background = "#fff";
+  setTimeout(() => { document.body.style.background = ""; }, 80);
+}
+
+/* --- PASSPORT, LOCALSTORAGE & CANVAS EXPORT --- */
+function save() {
+  const data = {
+    v: 1, name: state.name, gender: state.gender, outfit: state.outfit, sen: state.sen, xp: state.xp,
+    km: state.km, stamps: state.stamps, quests: state.quests, photos: state.photos.slice(-state.photoCap),
+    wishes: state.wishes.slice(0, 40), friends: state.friends, gifts: state.gifts, vip: state.vip,
+    music: state.music, sfx: state.sfx, photoCap: state.photoCap, photoBonus: state.photoBonus,
+    quizDone: state.quizDone, wishDone: state.wishDone, items: state.items, certSeen: state.certSeen,
+  };
+  try { localStorage.setItem(KEY, JSON.stringify(data)); }
+  catch {
+    data.photos = data.photos.slice(-2);
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* quota */ }
+  }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    Object.assign(state, {
+      name: d.name || state.name, gender: d.gender || "nam", outfit: d.outfit || "bui",
+      sen: d.sen || 0, xp: d.xp || 0, km: d.km || 0, stamps: d.stamps || {}, quests: d.quests || {},
+      photos: d.photos || [], wishes: d.wishes?.length ? d.wishes : state.wishes, friends: d.friends || [],
+      gifts: d.gifts || 0, vip: d.vip || {}, music: d.music ?? 0.35, sfx: d.sfx ?? 0.75,
+      photoCap: d.photoCap || 6, photoBonus: d.photoBonus || {}, quizDone: d.quizDone || {},
+      wishDone: d.wishDone || {}, items: d.items || {}, certSeen: !!d.certSeen,
+    });
+    return true;
+  } catch { return false; }
+}
+function updateHUD() {
+  const lv = levelInfo(state.xp);
+  $("hud-name").textContent = state.name;
+  $("hud-place").textContent = state.place === "hub" ? "Sa bàn Việt Nam" : REGION[state.place].name;
+  $("hud-lv").textContent = "Bậc " + lv.lv;
+  $("hud-sen").textContent = state.sen + " sen";
+  $("hud-km").textContent = state.km.toFixed(1) + " km";
+  $("hud-stamp").textContent = countStamps() + "/5 dấu";
+  $("xp-fill").style.width = Math.min(100, (lv.cur / lv.need) * 100) + "%";
+}
+function drawMini() {
+  const 
