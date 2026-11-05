@@ -1,0 +1,95 @@
+một quà nhỏ"); openPanel("shop");
+  } else if (id === "film") {
+    if (state.sen < 6) { toast("Chưa đủ hạt sen"); return; }
+    state.sen -= 6; state.photoCap += 3; save(); updateHUD(); toast("Thêm 3 chỗ ảnh"); openPanel("shop");
+  }
+}
+
+let worldReady = false;
+let pendingStart = false;
+function hideBoot() {
+  const el = $("boot");
+  if (el) el.hidden = true;
+}
+function boot() {
+  window.__controlsTest = {
+    getYaw: () => state.yaw,
+    getSpeed: () => state.speed,
+    setKeys: (codes) => { forcedKeys = new Set(codes); },
+  };
+  try { if (window.parent && window.parent !== window) window.parent.__controlsTest = window.__controlsTest; } catch { /* cross */ }
+  const retry = $("boot-retry");
+  if (retry) retry.onclick = () => location.reload();
+  setTimeout(() => {
+    if (worldReady) return;
+    if (retry) retry.hidden = false;
+    const note = document.querySelector("#boot p");
+    if (note) note.textContent = "Lâu hơn thường lệ. Bấm tải lại để vào chơi.";
+  }, 8000);
+  try {
+    const had = load();
+    if (had) { $("pname").value = state.name; $("save-note").hidden = false; }
+    initThree();
+    rig = makeChibi({ outfit: state.outfit, gender: state.gender });
+    scene.add(rig.group);
+    selectGroup = new THREE.Group();
+    const deck = addMesh(selectGroup, cyl(1.05, 1.15, 0.28, 16), 0xc48a52, 0, 0.2, 0);
+    addMesh(selectGroup, cyl(0.72, 0.78, 0.55, 10), 0x8a5a34, 0, -0.05, 0);
+    addMesh(selectGroup, cyl(1.15, 1.15, 0.08, 18), 0xf0b429, 0, 0.36, 0);
+    scene.add(selectGroup);
+    void deck;
+    bindUI();
+    refreshOutfitUI();
+    applyLook(rig, state.outfit, state.gender);
+    let last = -1;
+    renderer.setAnimationLoop((now) => {
+      if (last < 0) last = now;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      animT += dt;
+      updateSky(dt);
+      updatePlayer(dt);
+      updateCrowd(dt);
+      updateParticles(dt);
+      if (state.mini?.tick) state.mini.tick(dt);
+      if (state.stampUntil && performance.now() > state.stampUntil) { $("stampfx").hidden = true; state.stampUntil = 0; }
+      if (state.mode === "play") {
+        hudT -= dt;
+        if (hudT <= 0) { hudT = 0.35; updateHUD(); drawMini(); refreshPrompt(); }
+        hintT -= dt;
+        if (hintT <= 0) $("hint").style.display = "none";
+        if (state.place === "tn") { gongT -= dt; if (gongT <= 0) { gongT = 6 + Math.random() * 4; playGong(); } }
+        if (state.place === "tb") { fluteT -= dt; if (fluteT <= 0) { fluteT = 8 + Math.random() * 6; playFlute(); } }
+      }
+      renderer.render(scene, camera);
+    });
+    const buildWorld = () => {
+      try {
+        buildHub();
+        hub.visible = false;
+        buildParticles();
+        buildCrowd();
+        worldReady = true;
+        hideBoot();
+        if (pendingStart) startGame();
+        let ri = 0;
+        const nextRegion = () => {
+          if (ri >= IDS.length) return;
+          const id = IDS[ri++];
+          if (!regions[id]) buildRegion(id);
+          setTimeout(nextRegion, 16);
+        };
+        setTimeout(nextRegion, 16);
+      } catch (err) {
+        window.showFatal(err);
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(buildWorld));
+  } catch (err) {
+    window.showFatal(err);
+  }
+}
+boot();
+</script>
+</body>
+</html>
