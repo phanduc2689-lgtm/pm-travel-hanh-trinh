@@ -1,0 +1,194 @@
+0b429, x, 2.38, z);
+}
+function rong(parent, x, z) {
+  addMesh(parent, box(3.4, 1.2, 2.2), 0x6b3a28, x, 0.85, z);
+  const roof = addMesh(parent, cone(2.3, 4.4, 4), 0x8c2f28, x, 3.5, z);
+  roof.rotation.y = Math.PI / 4;
+  addMesh(parent, cyl(0.08, 0.08, 3.2, 5), 0x2a2118, x - 1.5, 1.7, z + 1.1);
+  addMesh(parent, cyl(0.08, 0.08, 3.2, 5), 0x2a2118, x + 1.5, 1.7, z + 1.1);
+}
+function gong(parent, x, z, rot) {
+  const geo = GEO.gong || (GEO.gong = new THREE.TorusGeometry(0.38, 0.07, 6, 10));
+  const m = new THREE.Mesh(geo, matColor(0xd4a017, { emissive: 0x6a4a00 }));
+  m.position.set(x, 0.85, z);
+  m.rotation.y = rot || 0;
+  parent.add(m);
+  addMesh(parent, cyl(0.04, 0.05, 0.85, 5), 0x5c3b28, x, 0.4, z);
+}
+function firepit(parent, x, z) {
+  addMesh(parent, cyl(0.55, 0.62, 0.18, 8), 0x666666, x, 0.1, z);
+  addMesh(parent, box(0.7, 0.08, 0.12), 0x5c3b28, x, 0.22, z);
+  const flame = addMesh(parent, cone(0.2, 0.55, 6), 0xff7a1a, x, 0.55, z, { emissive: 0xff4d00 });
+  flames.push(flame);
+}
+function pedestal(parent, x, z) {
+  addMesh(parent, cyl(0.72, 0.82, 0.32, 8), 0xefe4d4, x, 0.16, z);
+  addMesh(parent, cyl(0.42, 0.42, 0.08, 12), 0xc5312a, x, 0.36, z);
+}
+function buildHub() {
+  hub = new THREE.Group();
+  scene.add(hub);
+  waterGeo = new THREE.PlaneGeometry(230, 230, 28, 28);
+  waterGeo.rotateX(-Math.PI / 2);
+  waterBaseY = new Float32Array(waterGeo.attributes.position.count);
+  const arr = waterGeo.attributes.position.array;
+  for (let i = 0; i < waterBaseY.length; i++) waterBaseY[i] = arr[i * 3 + 1];
+  const water = new THREE.Mesh(waterGeo, matColor(0x3aa8bc, { opacity: 0.94 }));
+  water.position.y = -0.45;
+  hub.add(water);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const h = 16 + (i % 3) * 7;
+    addMesh(hub, cone(9 + (i % 4) * 2, h, 5), i % 2 ? 0x6ea35a : 0x87b86a, Math.cos(a) * 96, h / 2 - 4, Math.sin(a) * 96);
+  }
+  for (let i = 0; i < 5; i++) {
+    const cloud = addMesh(hub, sph(4, 8, 6), 0xfffaf3, -40 + i * 22, 22 + (i % 2) * 3, -20 + (i % 3) * 8);
+    cloud.scale.set(1.6, 0.45, 1);
+    bobbers.push(cloud);
+  }
+  for (const isl of ISLANDS) {
+    addMesh(hub, cyl(isl.r + 1.3, isl.r + 1.5, 0.5, 24), 0xe7c98a, isl.x, -0.15, isl.z);
+    addMesh(hub, cyl(isl.r, isl.r, 0.7, 24), isl.color, isl.x, 0.15, isl.z);
+    arch(hub, isl.x, isl.z, isl.id === "mt" ? 0xc5312a : 0xb94a3e);
+    const lab = makeLabel(isl.name, 3.4);
+    lab.position.set(isl.x, 3.5, isl.z);
+    hub.add(lab);
+  }
+  for (let i = 0; i < ISLANDS.length - 1; i++) {
+    const a = ISLANDS[i], b = ISLANDS[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    const m = addMesh(hub, box(4.2, 0.22, len), 0xd8c098, (a.x + b.x) / 2, 0.16, (a.z + b.z) / 2);
+    m.rotation.y = Math.atan2(dx, dz);
+  }
+  // landmarks on the sa bàn
+  for (let i = 0; i < 4; i++) addMesh(hub, box(3.2 - i * 0.45, 0.35, 1.4), i % 2 ? 0xe1b84a : 0x7fbf4a, -3, 0.55 + i * 0.32, -56 - i);
+  stilt(hub, 6, -44);
+  addMesh(hub, cone(3.2, 7, 5), 0x8d9a62, -8, 3.6, -58);
+  temple(hub, 20, -20);
+  jar(hub, 10, -12, 1.1); jar(hub, 11.2, -13, 0.8);
+  tree(hub, 18, -10);
+  house(hub, 6, 16, 1.6, 1.3, 1.1, 0xf2d48a, 0xb94a3e);
+  addMesh(hub, sph(0.18, 8, 6), 0xffb347, 6, 2.5, 17.2, { emissive: 0xff5a00 });
+  rong(hub, -16, 42);
+  palm(hub, 14, 78, 1); boat(hub, 2, 82, 0x8a4b2a); umbrella(hub, 12, 70, 0xf25c4c);
+  const flowerGeo = cone(0.12, 0.28, 5); flowerGeo.translate(0, 0.2, 0);
+  const flowers = new THREE.InstancedMesh(flowerGeo, matColor(0xff7aa2), 36);
+  flowers.frustumCulled = false;
+  for (let i = 0; i < 36; i++) {
+    const isl = ISLANDS[i % 5];
+    const ang = i * 0.9;
+    dummy.position.set(isl.x + Math.cos(ang) * (isl.r * 0.55), 0.45, isl.z + Math.sin(ang) * (isl.r * 0.55));
+    dummy.scale.setScalar(0.8 + (i % 3) * 0.2);
+    dummy.rotation.set(0, ang, 0);
+    dummy.updateMatrix();
+    flowers.setMatrixAt(i, dummy.matrix);
+    flowers.setColorAt(i, new THREE.Color(i % 2 ? 0xff7aa2 : 0xffe08a));
+  }
+  flowers.instanceMatrix.needsUpdate = true;
+  if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
+  hub.add(flowers);
+}
+function spotsFor(id) {
+  return [
+    { kind: "talk", x: 0, z: -1.2, label: "Nói chuyện với " + TALK[id].name },
+    { kind: "quest", x: -6, z: 2.2, label: QUEST[id].doing },
+    { kind: "stamp", x: 5.2, z: 3.2, label: "Đóng dấu hộ chiếu" },
+    { kind: "photo", x: 0.2, z: -7.4, label: "Săn mây / Chụp ảnh" },
+    { kind: "lantern", x: 6.4, z: -4.6, label: "Thả đèn nguyện" },
+    { kind: "exit", x: 0, z: 13.2, label: "Rời vùng" },
+  ];
+}
+function buildRegion(id) {
+  const [ox, oz] = DETAIL[id];
+  const g = new THREE.Group();
+  g.position.set(ox, 0, oz);
+  g.visible = false;
+  scene.add(g);
+  addMesh(g, cyl(20, 20.4, 0.6, 28), 0xc2a36b, 0, -0.2, 0);
+  const top = { tb: 0xc6a24e, bb: 0xd9d3c5, mt: 0xe7d7b1, tn: 0x3e7a3a, mn: 0xd8c48a }[id];
+  addMesh(g, cyl(17.5, 17.5, 0.45, 28), top, 0, 0.12, 0);
+  if (id === "mn" || id === "mt") {
+    const w = addMesh(g, box(id === "mn" ? 30 : 16, 0.2, id === "mn" ? 30 : 8), 0x3aa8bc, id === "mn" ? 0 : 0, -0.05, id === "mn" ? 0 : -6, { opacity: 0.9 });
+    if (id === "mn") w.position.y = -0.15;
+  }
+  if (id === "tb") {
+    for (let i = 0; i < 5; i++) addMesh(g, box(9 - i * 0.8, 0.42, 2.4), i % 2 ? 0xe1b84a : 0x7fbf4a, -1.5, 0.4 + i * 0.4, -6.5 - i * 1.3);
+    addMesh(g, cone(4.5, 8, 5), 0x8aa06a, -8, 4, -12);
+    addMesh(g, cone(3.4, 6, 5), 0x9aaa78, 7, 3.2, -11);
+    stilt(g, 6.5, -1.5); stilt(g, 8.2, 1.2);
+    for (let i = 0; i < 3; i++) addMesh(g, sph(1.6, 8, 6), 0xffffff, -6 + i * 3, 1.6, 8, { opacity: 0.22, basic: true });
+    const riceGeo = cone(0.08, 0.35, 4); riceGeo.translate(0, 0.2, 0);
+    const rice = new THREE.InstancedMesh(riceGeo, matColor(0xe1b84a), 40);
+    rice.frustumCulled = false;
+    for (let i = 0; i < 40; i++) {
+      dummy.position.set(-4 + (i % 8) * 0.7, 0.35, 3 + Math.floor(i / 8) * 0.7);
+      dummy.rotation.y = i;
+      dummy.updateMatrix();
+      rice.setMatrixAt(i, dummy.matrix);
+    }
+    g.add(rice);
+  } else if (id === "bb") {
+    temple(g, 0, -6);
+    house(g, -6, 2, 2.2, 1.8, 1.3, 0xd9d3c7, 0x8c4038);
+    addMesh(g, cyl(0.55, 0.7, 1.6, 8), 0x9a9288, 6.5, 0.9, -2);
+    addMesh(g, cyl(0.28, 0.4, 1.1, 8), 0xb7b0a6, 7.3, 1.7, -2);
+    jar(g, 4, 1, 1.3); jar(g, 5, 1.6, 0.9); jar(g, 3.4, 1.8, 0.7);
+    tree(g, -8, -2);
+  } else if (id === "mt") {
+    temple(g, 0, -8);
+    for (let i = 0; i < 5; i++) {
+      house(g, -6 + i * 2.5, 2.2, 1.5, 1.5, 1.35, 0xf2d48a, 0xb94a3e);
+      addMesh(g, sph(0.16, 8, 6), i % 2 ? 0xff5a6a : 0xffb347, -6 + i * 2.5, 2.5, 3.15, { emissive: 0xff5a00 });
+    }
+    addMesh(g, box(5, 0.18, 1.4), 0x8a5a3a, 0, 0.4, -6);
+    boat(g, 4.5, -6, 0x6b3a28);
+  } else if (id === "tn") {
+    rong(g, 0, -5);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      gong(g, Math.cos(a) * 3.2, Math.sin(a) * 3.2 + 2, -a);
+    }
+    firepit(g, 0, 2);
+    pine(g, -7, -2, 1.1); pine(g, 7, 0, 0.9); pine(g, -6, 6, 0.8); pine(g, 8, 5, 1);
+  } else if (id === "mn") {
+    for (let i = 0; i < 4; i++) addMesh(g, box(1.4, 0.12, 3.2), 0xc4a06a, -4.5 + i * 1.5, 0.28, 2);
+    boat(g, -3, -2, 0x1f6b8a); boat(g, 1, -3.2, 0x8a4b2a); boat(g, 4, 0.5, 0xc5312a);
+    palm(g, -7, 4, 1.05); palm(g, 7, 3, 0.9); palm(g, 6, -6, 1.1);
+    umbrella(g, -2, 4, 0xf25c4c); umbrella(g, 2, 5, 0xf0b429);
+    addMesh(g, box(0.8, 0.4, 0.8), 0xe1b84a, -1, 0.5, 3.2);
+    addMesh(g, sph(0.22, 8, 6), 0xffd24a, 3.2, 0.7, 4);
+    addMesh(g, sph(0.28, 8, 6), 0x6fbf7a, 3.8, 0.55, 3.4);
+  }
+  pedestal(g, 5.2, 3.2);
+  addMesh(g, cyl(0.08, 0.08, 1.5, 5), 0x6b4428, 6.4, 0.75, -4.6);
+  addMesh(g, sph(0.18, 8, 6), 0xffb347, 6.4, 1.6, -4.6, { emissive: 0xff5a00 });
+  addMesh(g, cyl(0.5, 0.55, 0.9, 6), 0xded4c8, 0.2, 0.5, -7.4);
+  addMesh(g, box(0.34, 0.2, 0.2), 0x2a2118, 0.2, 1.1, -7.4);
+  arch(g, 0, 13.2, 0xefe6e0);
+  const amb = makeChibi({
+    outfit: id === "tb" ? "vip_tb" : id === "mt" || id === "bb" ? "vip_cd" : id === "mn" ? "truyen" : "truyen",
+    gender: id === "bb" || id === "tn" ? "nam" : "nu",
+    elder: id === "bb" || id === "tn",
+  });
+  amb.group.position.set(0, 0, -1.2);
+  amb.group.userData.kind = "talk";
+  g.add(amb.group);
+  const tag = makeLabel(TALK[id].name, 1.5);
+  tag.position.set(0, 2.35, -1.2);
+  g.add(tag);
+  regions[id] = { group: g, ox, oz, spots: spotsFor(id), amb };
+}
+function buildParticles() {
+  const tex = softTex();
+  const mk = (n, color, size) => {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(n * 3);
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size, map: tex, transparent: true, depthWrite: false, color, opacity: 0.9 }));
+    pts.frustumCulled = false;
+    scene.add(pts);
+    return { pts, n, pos };
+  };
+  const P = mk(140, 0xffb4c8, 0.16); petals = P.pts; petals.userData = { meta: [], arr: P.pos };
+  for (let i = 0; i < 140; i++) petals.userData.meta.push({ x: (Math.random() - 0.5) * 10, y: Math.random() * 5
