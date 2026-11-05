@@ -1,0 +1,198 @@
+}
+    let best = -1, bd = 2.5;
+    for (let i = 0; i < npc.length; i++) {
+      if (npc[i].x == null) continue;
+      const d = Math.hypot(playerPos.x - npc[i].x, playerPos.z - npc[i].z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) push("npc" + best, "Gặp " + npc[best].name, bd, () => openProfile(best));
+  }
+  acts.sort((a, b) => a.d - b.d);
+  return acts.slice(0, 3);
+}
+function refreshPrompt() {
+  const acts = collectActs();
+  state.acts = acts;
+  const key = acts.map((a) => a.id).join("|");
+  if (key === promptKey) return;
+  promptKey = key;
+  const box = $("prompt");
+  box.innerHTML = "";
+  acts.forEach((a, idx) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = idx === 0 ? "primary" : "";
+    b.textContent = a.label;
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); a.run(); });
+    box.appendChild(b);
+  });
+}
+function doPrimary() {
+  if (state.photo || state.paused || state.mode !== "play") return;
+  if (!state.acts[0]) { toast("Hãy lại gần một cổng hoặc điểm vàng"); return; }
+  state.acts[0].run();
+}
+function doSpot(kind) {
+  const id = state.place;
+  if (kind === "quest") openQuest(id);
+  else if (kind === "stamp") doStamp(id);
+  else if (kind === "photo") enterPhoto();
+  else if (kind === "lantern") openWish();
+  else if (kind === "talk") openTalk(id);
+  else if (kind === "exit") exitRegion();
+}
+function enterRegion(id) {
+  if (!regions[id]) buildRegion(id);
+  if (state.place === id) { closeSheet(); return; }
+  if (state.place !== "hub" && state.place !== id && regions[state.place]) regions[state.place].group.visible = false;
+  if (state.place === "hub" || !state.return) state.return = { x: playerPos.x, z: playerPos.z + 4.2, cam: camYaw };
+  hub.visible = false;
+  for (const k of IDS) if (regions[k]) regions[k].group.visible = k === id;
+  state.place = id;
+  const r = regions[id];
+  playerPos.x = r.ox; playerPos.z = r.oz + 8;
+  state.yaw = 0; camYaw = 0; state.snapCam = true;
+  setAmbient(id); closeSheet();
+  toast(REGION[id].full);
+  promptKey = "\0";
+}
+function exitRegion() {
+  if (state.place === "hub") return;
+  regions[state.place].group.visible = false;
+  hub.visible = true;
+  const back = state.return || { x: SPAWN.x, z: SPAWN.z, cam: 0 };
+  state.place = "hub";
+  let x = back.x, z = back.z;
+  if (!walkableHub(x, z)) { x = SPAWN.x; z = SPAWN.z; }
+  playerPos.x = x; playerPos.z = z;
+  camYaw = back.cam || 0;
+  state.yaw = camYaw;
+  state.snapCam = true;
+  setAmbient("hub");
+  toast("Sa bàn Việt Nam");
+  promptKey = "\0";
+}
+function openTalk(id) {
+  const t = TALK[id];
+  openModal(`<p class="muted">${esc(t.role)}</p><h3>${esc(t.name)}</h3><p>${esc(t.line)}</p>
+    <div class="row"><button type="button" data-act="quiz" data-id="${id}">Câu đố văn hóa</button>
+    <button type="button" data-act="quest" data-id="${id}">Làm nhiệm vụ</button></div>`);
+}
+function openQuiz(id) {
+  const q = QUIZ[id];
+  openModal(`<h3>Câu đố</h3><p>${esc(q.q)}</p>` + q.a.map((c, i) => `<button type="button" data-act="answer" data-id="${id}" data-i="${i}">${esc(c)}</button>`).join(""));
+}
+function answerQuiz(id, i) {
+  const q = QUIZ[id];
+  if (Number(i) === q.ok) {
+    const first = !state.quizDone[id];
+    state.quizDone[id] = true;
+    if (first) gain(6, 12, true);
+    playArp();
+    openModal(`<h3>Đúng rồi</h3><p>${esc(q.fact)}</p><p class="muted">${first ? "+6 hạt sen, +12 kinh nghiệm" : "Bạn đã nhận thưởng câu này."}</p>`);
+  } else {
+    playWrong();
+    openModal(`<h3>Chưa đúng</h3><p>${esc(q.fact)}</p><button type="button" data-act="quiz" data-id="${id}">Thử lại</button>`);
+  }
+}
+function openQuest(id) {
+  if (id === "tb") startRice();
+  else if (id === "bb") startPottery();
+  else if (id === "mt") startColors();
+  else if (id === "tn") startRhythm();
+  else if (id === "mn") startFruit();
+}
+function completeQuest(id) {
+  const first = !state.quests[id];
+  state.quests[id] = true;
+  state.items[id] = GIFTNAME[id];
+  const up = first ? gain(12, 22, true) : false;
+  playArp();
+  openModal(`<h3>${first ? "Nhiệm vụ hoàn thành" : "Đã làm rồi"}</h3><p>${esc(QUEST[id].fact)}</p><p class="muted">${first ? (up ? "Lên bậc! +" : "+") + "12 hạt sen. Quà: " + GIFTNAME[id] : "Không nhận thêm hạt sen."}</p>`);
+}
+function failMini(id, msg) {
+  openModal(`<h3>Chưa đạt</h3><p>${esc(msg)}</p><button type="button" data-act="quest" data-id="${id}">Thử lại</button>`);
+}
+function startRice() {
+  openModal(`<h3>Gặt lúa mùa vàng</h3><p class="muted">Chạm bông lúa đang sáng. Đủ 12 bông trước khi hết giờ.</p><p id="rice-meta"></p><div class="stalks" id="stalks"></div>`);
+  const box = $("modal").querySelector("#stalks");
+  for (let i = 0; i < 8; i++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = "Lúa"; b.dataset.i = String(i);
+    box.appendChild(b);
+  }
+  const mini = { score: 0, left: 9, lit: 0, acc: 0 };
+  const paint = () => {
+    [...box.children].forEach((b, i) => b.classList.toggle("lit", i === mini.lit));
+    const meta = $("modal").querySelector("#rice-meta");
+    if (meta) meta.textContent = `${mini.score}/12 · ${mini.left.toFixed(1)}s`;
+  };
+  box.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (Number(b.dataset.i) === mini.lit) {
+      mini.score += 1; playBlip();
+      mini.lit = (mini.lit + 1 + Math.floor(Math.random() * 6)) % 8;
+      if (mini.score >= 12) completeQuest("tb");
+    } else { mini.left -= 0.35; playWrong(); }
+    paint();
+  };
+  paint();
+  state.mini = { tick(dt) { mini.left -= dt; mini.acc += dt; if (mini.acc > 0.7) { mini.acc = 0; mini.lit = (mini.lit + 3) % 8; } paint(); if (mini.left <= 0) failMini("tb", "Hết giờ. Hãy chạm đúng bông sáng."); } };
+}
+function startPottery() {
+  openModal(`<h3>Vuốt gốm Bát Tràng</h3><p class="muted">Vuốt vòng đều quanh bàn xoay, đừng quá nhanh cũng đừng dừng.</p><div class="wheel" id="wheel"><div class="clay"></div></div><p id="pot-meta" class="muted"></p>`);
+  const wheel = $("modal").querySelector("#wheel");
+  let lastAng = null, lastT = 0, total = 0, steady = 0, bad = 0, life = 18;
+  const move = (e) => {
+    const r = wheel.getBoundingClientRect();
+    const ang = Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+    const now = performance.now();
+    if (lastAng != null) {
+      let d = Math.atan2(Math.sin(ang - lastAng), Math.cos(ang - lastAng));
+      const dt = Math.max(0.016, (now - lastT) / 1000);
+      const spd = Math.abs(d) / dt;
+      total += Math.abs(d);
+      if (spd > 0.9 && spd < 8) steady += dt; else bad += dt;
+    }
+    lastAng = ang; lastT = now;
+    const meta = $("modal").querySelector("#pot-meta");
+    if (meta) meta.textContent = `Vòng: ${(total / (Math.PI * 2)).toFixed(1)} / 3`;
+    if (total > Math.PI * 2 * 3 && steady > 2.2 && bad < steady) completeQuest("bb");
+  };
+  const down = (e) => { wheel.setPointerCapture(e.pointerId); lastAng = null; move(e); };
+  wheel.addEventListener("pointerdown", down);
+  wheel.addEventListener("pointermove", (e) => { if (e.pressure === 0 && e.buttons === 0 && e.pointerType === "mouse") return; if (lastAng == null && e.buttons === 0) return; move(e); });
+  state.mini = {
+    tick(dt) { life -= dt; if (life <= 0) failMini("bb", "Tay chưa đều. Thử vuốt chậm và đều hơn."); },
+    stop() { wheel.removeEventListener("pointerdown", down); },
+  };
+}
+function startColors() {
+  const seq = ["do", "vang", "luc", "hong", "vang"];
+  const label = { do: "Đỏ", vang: "Vàng", luc: "Lục", hong: "Hồng" };
+  openModal(`<h3>Dệt sắc đèn lồng</h3><p class="muted">Nhìn dãy màu rồi chạm lại đúng thứ tự.</p><div class="colors" id="cols">
+    ${["do","vang","luc","hong"].map((c) => `<button type="button" class="c-${c}" data-c="${c}">${label[c]}</button>`).join("")}
+  </div><p id="col-meta" class="muted">Chờ đèn sáng…</p>`);
+  const mini = { phase: "show", t: 0.4, step: -1, input: 0, tries: 0 };
+  const paint = (on) => { $("modal").querySelectorAll("#cols button").forEach((b) => b.classList.toggle("lit", b.dataset.c === on)); };
+  $("modal").querySelector("#cols").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b || mini.phase !== "input") return;
+    if (b.dataset.c === seq[mini.input]) {
+      mini.input += 1; playBlip();
+      if (mini.input >= seq.length) completeQuest("mt");
+    } else {
+      playWrong(); mini.tries += 1;
+      if (mini.tries >= 4) failMini("mt", "Sai sắc quá nhiều. Nhìn lại dãy đèn.");
+      else { mini.phase = "show"; mini.t = 0; mini.step = -1; mini.input = 0; $("modal").querySelector("#col-meta").textContent = "Xem lại nào…"; }
+    }
+  };
+  state.mini = { tick(dt) {
+    if (mini.phase !== "show") return;
+    mini.t += dt;
+    const step = Math.floor(mini.t / 0.55);
+    if (step >= seq.length) { mini.phase = "input"; paint(null); const m = $("modal").querySelector("#col-meta"); if (m) m.textContent = "Tới lượt bạn"; return; }
+    paint((mini.t % 0.55) < 0.32 ? seq[step] : null);
+  } };
+}
+function startRhythm() {
+  const times = [1.0, 1
